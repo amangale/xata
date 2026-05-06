@@ -24,6 +24,27 @@ type AuthStore interface {
 	ListAPIKeys(ctx context.Context, targetType KeyTargetType, targetID string) ([]APIKey, error)
 	CreateAPIKey(ctx context.Context, targetType KeyTargetType, targetID string, key *APIKeyCreate) (key.Key, *APIKey, error)
 	DeleteAPIKeys(ctx context.Context, targetType KeyTargetType, targetID string, keyIDs []string) error
+
+	// Org limit operations
+	GetOrgLimits(ctx context.Context, orgID string) (map[OrgLimitKey]any, error)
+	SetOrgLimit(ctx context.Context, orgID string, key OrgLimitKey, value any) error
+	DeleteOrgLimit(ctx context.Context, orgID string, key OrgLimitKey) error
+}
+
+// OrgLimitKey identifies an organization-level limit stored in the auth service.
+type OrgLimitKey string
+
+const (
+	OrgLimitMaxMembers OrgLimitKey = "max_members"
+	OrgLimitMaxInvites OrgLimitKey = "max_invites"
+)
+
+func (k OrgLimitKey) IsValid() bool {
+	switch k {
+	case OrgLimitMaxMembers, OrgLimitMaxInvites:
+		return true
+	}
+	return false
 }
 
 // KeyTargetType represents the type of entity the API key is associated with

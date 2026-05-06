@@ -746,6 +746,46 @@ func (_c *ProjectsStore_DeleteGithubRepoMapping_Call) Return(_a0 error) *Project
 	return _c
 }
 
+// DeleteOrgLimit provides a mock function with given fields: ctx, orgID, projectID, key
+func (_m *ProjectsStore) DeleteOrgLimit(ctx context.Context, orgID string, projectID string, key store.LimitKey) error {
+	ret := _m.Called(ctx, orgID, projectID, key)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, store.LimitKey) error); ok {
+		r0 = rf(ctx, orgID, projectID, key)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// ProjectsStore_DeleteOrgLimit_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteOrgLimit'
+type ProjectsStore_DeleteOrgLimit_Call struct {
+	*mock.Call
+}
+
+// DeleteOrgLimit is a helper method to define mock.On call
+//   - ctx context.Context
+//   - orgID string
+//   - projectID string
+//   - key store.LimitKey
+func (_e *ProjectsStore_Expecter) DeleteOrgLimit(ctx interface{}, orgID interface{}, projectID interface{}, key interface{}) *ProjectsStore_DeleteOrgLimit_Call {
+	return &ProjectsStore_DeleteOrgLimit_Call{Call: _e.mock.On("DeleteOrgLimit", ctx, orgID, projectID, key)}
+}
+
+func (_c *ProjectsStore_DeleteOrgLimit_Call) Run(run func(ctx context.Context, orgID string, projectID string, key store.LimitKey)) *ProjectsStore_DeleteOrgLimit_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(store.LimitKey))
+	})
+	return _c
+}
+
+func (_c *ProjectsStore_DeleteOrgLimit_Call) Return(_a0 error) *ProjectsStore_DeleteOrgLimit_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
 // DeleteProject provides a mock function with given fields: ctx, organizationID, projectID
 func (_m *ProjectsStore) DeleteProject(ctx context.Context, organizationID string, projectID string) error {
 	ret := _m.Called(ctx, organizationID, projectID)
@@ -1060,6 +1100,54 @@ func (_c *ProjectsStore_GetGithubRepoMappingByRepoID_Call) Run(run func(ctx cont
 }
 
 func (_c *ProjectsStore_GetGithubRepoMappingByRepoID_Call) Return(_a0 *store.GithubRepoMappingWithOrg, _a1 error) *ProjectsStore_GetGithubRepoMappingByRepoID_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+// GetOrgLimits provides a mock function with given fields: ctx, orgID, projectID
+func (_m *ProjectsStore) GetOrgLimits(ctx context.Context, orgID string, projectID string) (map[store.LimitKey]interface{}, error) {
+	ret := _m.Called(ctx, orgID, projectID)
+
+	var r0 map[store.LimitKey]interface{}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) map[store.LimitKey]interface{}); ok {
+		r0 = rf(ctx, orgID, projectID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[store.LimitKey]interface{})
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, orgID, projectID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ProjectsStore_GetOrgLimits_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOrgLimits'
+type ProjectsStore_GetOrgLimits_Call struct {
+	*mock.Call
+}
+
+// GetOrgLimits is a helper method to define mock.On call
+//   - ctx context.Context
+//   - orgID string
+//   - projectID string
+func (_e *ProjectsStore_Expecter) GetOrgLimits(ctx interface{}, orgID interface{}, projectID interface{}) *ProjectsStore_GetOrgLimits_Call {
+	return &ProjectsStore_GetOrgLimits_Call{Call: _e.mock.On("GetOrgLimits", ctx, orgID, projectID)}
+}
+
+func (_c *ProjectsStore_GetOrgLimits_Call) Run(run func(ctx context.Context, orgID string, projectID string)) *ProjectsStore_GetOrgLimits_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *ProjectsStore_GetOrgLimits_Call) Return(_a0 map[store.LimitKey]interface{}, _a1 error) *ProjectsStore_GetOrgLimits_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
@@ -1582,6 +1670,47 @@ func (_c *ProjectsStore_ListRegions_Call) Run(run func(ctx context.Context, orga
 
 func (_c *ProjectsStore_ListRegions_Call) Return(_a0 []store.Region, _a1 error) *ProjectsStore_ListRegions_Call {
 	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+// SetOrgLimit provides a mock function with given fields: ctx, orgID, projectID, key, value
+func (_m *ProjectsStore) SetOrgLimit(ctx context.Context, orgID string, projectID string, key store.LimitKey, value interface{}) error {
+	ret := _m.Called(ctx, orgID, projectID, key, value)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, store.LimitKey, interface{}) error); ok {
+		r0 = rf(ctx, orgID, projectID, key, value)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// ProjectsStore_SetOrgLimit_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetOrgLimit'
+type ProjectsStore_SetOrgLimit_Call struct {
+	*mock.Call
+}
+
+// SetOrgLimit is a helper method to define mock.On call
+//   - ctx context.Context
+//   - orgID string
+//   - projectID string
+//   - key store.LimitKey
+//   - value interface{}
+func (_e *ProjectsStore_Expecter) SetOrgLimit(ctx interface{}, orgID interface{}, projectID interface{}, key interface{}, value interface{}) *ProjectsStore_SetOrgLimit_Call {
+	return &ProjectsStore_SetOrgLimit_Call{Call: _e.mock.On("SetOrgLimit", ctx, orgID, projectID, key, value)}
+}
+
+func (_c *ProjectsStore_SetOrgLimit_Call) Run(run func(ctx context.Context, orgID string, projectID string, key store.LimitKey, value interface{})) *ProjectsStore_SetOrgLimit_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(store.LimitKey), args[4].(interface{}))
+	})
+	return _c
+}
+
+func (_c *ProjectsStore_SetOrgLimit_Call) Return(_a0 error) *ProjectsStore_SetOrgLimit_Call {
+	_c.Call.Return(_a0)
 	return _c
 }
 

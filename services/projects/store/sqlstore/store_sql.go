@@ -1,6 +1,7 @@
 package sqlstore
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"embed"
@@ -1481,6 +1482,91 @@ func (s *sqlProjectStore) DeleteGithubInstallation(ctx context.Context, installa
 		installationID)
 	if err != nil {
 		return fmt.Errorf("delete installation %d: %w", installationID, err)
+	}
+	return nil
+}
+
+func decodeLimits[K ~string](raw []byte) (map[K]any, error) {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.UseNumber()
+	var m map[K]any
+	if err := d.Decode(&m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// GetOrgLimits returns stored limit overrides for the given org and project, with
+// project-level overrides taking precedence over org-level overrides.
+func (s *sqlProjectStore) GetOrgLimits(ctx context.Context, orgID, projectID string) (map[store.LimitKey]any, error) {
+	rows, err := s.sql.QueryContext(ctx, `
+		SELECT project_id, limits
+		FROM organization_limits
+		WHERE organization_id = $1 AND project_id IN ('', $2)
+	`, orgID, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("query org limits: %w", err)
+	}
+	defer rows.Close()
+
+	orgLimits := make(map[store.LimitKey]any)
+	projectLimits := make(map[store.LimitKey]any)
+	for rows.Next() {
+		var pid string
+		var raw []byte
+		if err := rows.Scan(&pid, &raw); err != nil {
+			return nil, fmt.Errorf("scan org limit: %w", err)
+		}
+		m, err := decodeLimits[store.LimitKey](raw)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal org limits: %w", err)
+		}
+		if pid == "" {
+			orgLimits = m
+		} else {
+			projectLimits = m
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate org limits: %w", err)
+	}
+
+	for k, v := range projectLimits {
+		orgLimits[k] = v
+	}
+	return orgLimits, nil
+}
+
+// SetOrgLimit upserts an override for a single limit at the org or project level.
+func (s *sqlProjectStore) SetOrgLimit(ctx context.Context, orgID, projectID string, key store.LimitKey, value any) error {
+	if !key.IsValid() {
+		return fmt.Errorf("unknown limit key %q", key)
+	}
+	valueJSON, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("marshal limit value: %w", err)
+	}
+	_, err = s.sql.ExecContext(ctx, `
+		INSERT INTO organization_limits (organization_id, project_id, limits)
+		VALUES ($1, $2, jsonb_build_object($3::text, $4::jsonb))
+		ON CONFLICT (organization_id, project_id) DO UPDATE
+		SET limits = organization_limits.limits || jsonb_build_object($3::text, $4::jsonb)
+	`, orgID, projectID, key, valueJSON)
+	if err != nil {
+		return fmt.Errorf("set org limit: %w", err)
+	}
+	return nil
+}
+
+// DeleteOrgLimit removes an override for a single limit at the org or project level.
+func (s *sqlProjectStore) DeleteOrgLimit(ctx context.Context, orgID, projectID string, key store.LimitKey) error {
+	_, err := s.sql.ExecContext(ctx, `
+		UPDATE organization_limits
+		SET limits = limits - $3::text
+		WHERE organization_id = $1 AND project_id = $2
+	`, orgID, projectID, key)
+	if err != nil {
+		return fmt.Errorf("delete org limit: %w", err)
 	}
 	return nil
 }

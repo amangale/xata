@@ -157,6 +157,92 @@ func (_c *AuthStore_DeleteAPIKeys_Call) Return(_a0 error) *AuthStore_DeleteAPIKe
 	return _c
 }
 
+// DeleteOrgLimit provides a mock function with given fields: ctx, orgID, _a2
+func (_m *AuthStore) DeleteOrgLimit(ctx context.Context, orgID string, _a2 store.OrgLimitKey) error {
+	ret := _m.Called(ctx, orgID, _a2)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, store.OrgLimitKey) error); ok {
+		r0 = rf(ctx, orgID, _a2)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// AuthStore_DeleteOrgLimit_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteOrgLimit'
+type AuthStore_DeleteOrgLimit_Call struct {
+	*mock.Call
+}
+
+// DeleteOrgLimit is a helper method to define mock.On call
+//   - ctx context.Context
+//   - orgID string
+//   - _a2 store.OrgLimitKey
+func (_e *AuthStore_Expecter) DeleteOrgLimit(ctx interface{}, orgID interface{}, _a2 interface{}) *AuthStore_DeleteOrgLimit_Call {
+	return &AuthStore_DeleteOrgLimit_Call{Call: _e.mock.On("DeleteOrgLimit", ctx, orgID, _a2)}
+}
+
+func (_c *AuthStore_DeleteOrgLimit_Call) Run(run func(ctx context.Context, orgID string, _a2 store.OrgLimitKey)) *AuthStore_DeleteOrgLimit_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(store.OrgLimitKey))
+	})
+	return _c
+}
+
+func (_c *AuthStore_DeleteOrgLimit_Call) Return(_a0 error) *AuthStore_DeleteOrgLimit_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+// GetOrgLimits provides a mock function with given fields: ctx, orgID
+func (_m *AuthStore) GetOrgLimits(ctx context.Context, orgID string) (map[store.OrgLimitKey]interface{}, error) {
+	ret := _m.Called(ctx, orgID)
+
+	var r0 map[store.OrgLimitKey]interface{}
+	if rf, ok := ret.Get(0).(func(context.Context, string) map[store.OrgLimitKey]interface{}); ok {
+		r0 = rf(ctx, orgID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[store.OrgLimitKey]interface{})
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, orgID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// AuthStore_GetOrgLimits_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOrgLimits'
+type AuthStore_GetOrgLimits_Call struct {
+	*mock.Call
+}
+
+// GetOrgLimits is a helper method to define mock.On call
+//   - ctx context.Context
+//   - orgID string
+func (_e *AuthStore_Expecter) GetOrgLimits(ctx interface{}, orgID interface{}) *AuthStore_GetOrgLimits_Call {
+	return &AuthStore_GetOrgLimits_Call{Call: _e.mock.On("GetOrgLimits", ctx, orgID)}
+}
+
+func (_c *AuthStore_GetOrgLimits_Call) Run(run func(ctx context.Context, orgID string)) *AuthStore_GetOrgLimits_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *AuthStore_GetOrgLimits_Call) Return(_a0 map[store.OrgLimitKey]interface{}, _a1 error) *AuthStore_GetOrgLimits_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
 // ListAPIKeys provides a mock function with given fields: ctx, targetType, targetID
 func (_m *AuthStore) ListAPIKeys(ctx context.Context, targetType store.KeyTargetType, targetID string) ([]store.APIKey, error) {
 	ret := _m.Called(ctx, targetType, targetID)
@@ -202,6 +288,46 @@ func (_c *AuthStore_ListAPIKeys_Call) Run(run func(ctx context.Context, targetTy
 
 func (_c *AuthStore_ListAPIKeys_Call) Return(_a0 []store.APIKey, _a1 error) *AuthStore_ListAPIKeys_Call {
 	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+// SetOrgLimit provides a mock function with given fields: ctx, orgID, _a2, value
+func (_m *AuthStore) SetOrgLimit(ctx context.Context, orgID string, _a2 store.OrgLimitKey, value interface{}) error {
+	ret := _m.Called(ctx, orgID, _a2, value)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, store.OrgLimitKey, interface{}) error); ok {
+		r0 = rf(ctx, orgID, _a2, value)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// AuthStore_SetOrgLimit_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetOrgLimit'
+type AuthStore_SetOrgLimit_Call struct {
+	*mock.Call
+}
+
+// SetOrgLimit is a helper method to define mock.On call
+//   - ctx context.Context
+//   - orgID string
+//   - _a2 store.OrgLimitKey
+//   - value interface{}
+func (_e *AuthStore_Expecter) SetOrgLimit(ctx interface{}, orgID interface{}, _a2 interface{}, value interface{}) *AuthStore_SetOrgLimit_Call {
+	return &AuthStore_SetOrgLimit_Call{Call: _e.mock.On("SetOrgLimit", ctx, orgID, _a2, value)}
+}
+
+func (_c *AuthStore_SetOrgLimit_Call) Run(run func(ctx context.Context, orgID string, _a2 store.OrgLimitKey, value interface{})) *AuthStore_SetOrgLimit_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(store.OrgLimitKey), args[3].(interface{}))
+	})
+	return _c
+}
+
+func (_c *AuthStore_SetOrgLimit_Call) Return(_a0 error) *AuthStore_SetOrgLimit_Call {
+	_c.Call.Return(_a0)
 	return _c
 }
 

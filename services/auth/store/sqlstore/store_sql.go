@@ -1,9 +1,11 @@
 package sqlstore
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -354,4 +356,69 @@ func IsConstraintError(err error, constraint string) bool {
 		return pqErr.Code == "23505" && pqErr.Constraint == constraint
 	}
 	return false
+}
+
+func decodeLimits[K ~string](raw []byte) (map[K]any, error) {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.UseNumber()
+	var m map[K]any
+	if err := d.Decode(&m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// GetOrgLimits returns the stored limit overrides for an organization.
+func (s *sqlAuthStore) GetOrgLimits(ctx context.Context, orgID string) (map[store.OrgLimitKey]any, error) {
+	var raw []byte
+	err := s.sql.QueryRowContext(ctx, `
+		SELECT limits
+		FROM organization_limits
+		WHERE organization_id = $1
+	`, orgID).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return map[store.OrgLimitKey]any{}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query org limits: %w", err)
+	}
+	limits, err := decodeLimits[store.OrgLimitKey](raw)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal org limits: %w", err)
+	}
+	return limits, nil
+}
+
+// SetOrgLimit upserts an override for a single organization limit.
+func (s *sqlAuthStore) SetOrgLimit(ctx context.Context, orgID string, key store.OrgLimitKey, value any) error {
+	if !key.IsValid() {
+		return fmt.Errorf("unknown org limit key %q", key)
+	}
+	valueJSON, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("marshal limit value: %w", err)
+	}
+	_, err = s.sql.ExecContext(ctx, `
+		INSERT INTO organization_limits (organization_id, limits)
+		VALUES ($1, jsonb_build_object($2::text, $3::jsonb))
+		ON CONFLICT (organization_id) DO UPDATE
+		SET limits = organization_limits.limits || jsonb_build_object($2::text, $3::jsonb)
+	`, orgID, key, valueJSON)
+	if err != nil {
+		return fmt.Errorf("set org limit: %w", err)
+	}
+	return nil
+}
+
+// DeleteOrgLimit removes an override for a single organization limit.
+func (s *sqlAuthStore) DeleteOrgLimit(ctx context.Context, orgID string, key store.OrgLimitKey) error {
+	_, err := s.sql.ExecContext(ctx, `
+		UPDATE organization_limits
+		SET limits = limits - $2::text
+		WHERE organization_id = $1
+	`, orgID, key)
+	if err != nil {
+		return fmt.Errorf("delete org limit: %w", err)
+	}
+	return nil
 }

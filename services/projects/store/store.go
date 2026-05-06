@@ -14,6 +14,31 @@ const (
 	BackupTypeContinuous  = "continuous"
 )
 
+// LimitKey identifies a project-level limit stored in the projects service.
+type LimitKey string
+
+const (
+	LimitMaxDescriptionLength   LimitKey = "max_description_length"
+	LimitMaxBranchesPerProject  LimitKey = "max_branches_per_project"
+	LimitMaxInstancesPerBranch  LimitKey = "max_instances_per_branch"
+	LimitMinInstancesPerBranch  LimitKey = "min_instances_per_branch"
+	LimitMaxStorageGBPerBranch  LimitKey = "max_storage_gb_per_branch"
+	LimitMaxAllowedInstanceType LimitKey = "max_allowed_instance_type"
+	LimitMaxBranchesPerHour     LimitKey = "max_branches_per_hour"
+	LimitMaxProjects            LimitKey = "max_projects"
+	LimitMaxProjectsPerHour     LimitKey = "max_projects_per_hour"
+)
+
+func (k LimitKey) IsValid() bool {
+	switch k {
+	case LimitMaxDescriptionLength, LimitMaxBranchesPerProject, LimitMaxInstancesPerBranch,
+		LimitMinInstancesPerBranch, LimitMaxStorageGBPerBranch, LimitMaxAllowedInstanceType,
+		LimitMaxBranchesPerHour, LimitMaxProjects, LimitMaxProjectsPerHour:
+		return true
+	}
+	return false
+}
+
 type Project struct {
 	ID          string             `json:"id"`
 	Name        string             `json:"name"`
@@ -332,6 +357,11 @@ type ProjectsStore interface {
 	DeleteGithubRepoMapping(ctx context.Context, organization, project string) error
 
 	DeleteGithubInstallation(ctx context.Context, installationID int64) error
+
+	// Org/project limit operations
+	GetOrgLimits(ctx context.Context, orgID, projectID string) (map[LimitKey]any, error)
+	SetOrgLimit(ctx context.Context, orgID, projectID string, key LimitKey, value any) error
+	DeleteOrgLimit(ctx context.Context, orgID, projectID string, key LimitKey) error
 }
 
 // CanAddChild returns the child depth in the branch tree if another child branch can be added

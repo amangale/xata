@@ -1,0 +1,28 @@
+{
+    "operations": [
+        {
+            "create_table": {
+                "name": "organization_limits",
+                "columns": [
+                    {
+                        "name": "organization_id",
+                        "type": "text",
+                        "pk": true
+                    },
+                    {
+                        "name": "project_id",
+                        "type": "text",
+                        "pk": true,
+                        "default": "''"
+                    },
+                    {
+                        "name": "limits",
+                        "type": "jsonb",
+                        "nullable": false,
+                        "default": "'{}'"
+                    }
+                ]
+            }
+        }
+    ]
+}
