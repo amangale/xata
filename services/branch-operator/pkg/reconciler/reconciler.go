@@ -181,7 +181,7 @@ func (r *BranchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Reconcile the Pooler for the branch
-	_, err = r.reconcilePooler(ctx, branch)
+	err = r.reconcilePooler(ctx, branch)
 	if err != nil {
 		log.Error(err, "reconciling Pooler")
 		return ctrl.Result{}, err

@@ -5,10 +5,11 @@ import (
 	"strconv"
 
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
+	apiv1ac "github.com/xataio/xata-cnpg/pkg/client/applyconfiguration/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"xata/services/branch-operator/api/v1alpha1"
 	"xata/services/branch-operator/pkg/reconciler/resources"
@@ -21,40 +22,40 @@ const PoolerSuffix = "-pooler"
 func (r *BranchReconciler) reconcilePooler(
 	ctx context.Context,
 	branch *v1alpha1.Branch,
-) (controllerutil.OperationResult, error) {
-	pooler := &apiv1.Pooler{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      branch.Name + PoolerSuffix,
-			Namespace: r.ClustersNamespace,
-		},
-	}
+) error {
+	name := branch.Name + PoolerSuffix
 
 	// Ensure the pooler does not exist when either:
 	// * The branch does not specify a pooler configuration
 	// * The branch does not have a Cluster associated with it
 	if !branch.Spec.Pooler.IsEnabled() || !branch.HasClusterName() {
+		pooler := &apiv1.Pooler{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: r.ClustersNamespace,
+			},
+		}
 		err := r.Get(ctx, types.NamespacedName{
-			Name:      branch.Name + PoolerSuffix,
+			Name:      name,
 			Namespace: r.ClustersNamespace,
 		}, pooler)
 		if err != nil {
-			return controllerutil.OperationResultNone, client.IgnoreNotFound(err)
+			return client.IgnoreNotFound(err)
 		}
 
-		if err := r.Delete(ctx, pooler); err != nil {
-			return controllerutil.OperationResultNone, err
-		}
-		return controllerutil.OperationResultUpdated, nil
+		return r.Delete(ctx, pooler)
 	}
 
-	result, err := controllerutil.CreateOrUpdate(ctx, r.Client, pooler, func() error {
-		if err := controllerutil.SetControllerReference(branch, pooler, r.Scheme); err != nil {
-			return err
-		}
-
-		ensureLabels(pooler, branch.Spec.InheritedMetadata)
-
-		pooler.Spec = resources.PoolerSpec(
+	ac := apiv1ac.Pooler(name, r.ClustersNamespace).
+		WithLabels(clusterLabels(branch.Spec.InheritedMetadata)).
+		WithOwnerReferences(metav1ac.OwnerReference().
+			WithAPIVersion(v1alpha1.GroupVersion.String()).
+			WithKind("Branch").
+			WithName(branch.Name).
+			WithUID(branch.UID).
+			WithBlockOwnerDeletion(true).
+			WithController(true)).
+		WithSpec(resources.PoolerSpec(
 			branch.ClusterName(),
 			branch.Spec.Pooler.Instances,
 			!branch.HasClusterName() || branch.Spec.ClusterSpec.Hibernation.IsEnabled(),
@@ -65,12 +66,9 @@ func (r *BranchReconciler) reconcilePooler(
 			r.ImagePullSecrets,
 			r.Tolerations,
 			branch.Spec.ClusterSpec.Affinity.GetNodeSelector(),
-		)
+		))
 
-		return nil
-	})
-
-	return result, err
+	return r.Apply(ctx, ac, client.FieldOwner(OperatorName), client.ForceOwnership)
 }
 
 // defaultPoolSize returns the PgBouncer default_pool_size to set for the
