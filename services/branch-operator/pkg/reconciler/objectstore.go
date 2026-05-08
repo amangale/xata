@@ -62,6 +62,8 @@ func (r *BranchReconciler) reconcileObjectStore(
 		os.Spec = resources.ObjectStoreSpec(
 			r.BackupsBucket,
 			r.BackupsEndpoint,
+			r.BarmanRegionSecretName,
+			r.BarmanRegionSecretKey,
 			branch.Spec.BackupSpec.Retention,
 		)
 

@@ -140,7 +140,13 @@ func PoolerServiceSpec(poolerName string) v1.ServiceSpec {
 //
 // It supports both production (AWS S3 with IAM role) and local dev (MinIO with
 // credentials) modes based on whether backupsEndpoint is set.
-func ObjectStoreSpec(backupsBucket, backupsEndpoint, retention string) barmanPluginApi.ObjectStoreSpec {
+func ObjectStoreSpec(
+	backupsBucket,
+	backupsEndpoint,
+	barmanRegionSecretName,
+	barmanRegionSecretKey,
+	retention string,
+) barmanPluginApi.ObjectStoreSpec {
 	spec := barmanPluginApi.ObjectStoreSpec{
 		RetentionPolicy: retention,
 		Configuration: apiv1.BarmanObjectStoreConfiguration{
@@ -148,6 +154,12 @@ func ObjectStoreSpec(backupsBucket, backupsEndpoint, retention string) barmanPlu
 			BarmanCredentials: apiv1.BarmanCredentials{
 				AWS: &apiv1.S3Credentials{
 					InheritFromIAMRole: true,
+					RegionReference: &apiv1.SecretKeySelector{
+						LocalObjectReference: apiv1.LocalObjectReference{
+							Name: barmanRegionSecretName,
+						},
+						Key: barmanRegionSecretKey,
+					},
 				},
 			},
 			Wal: &apiv1.WalBackupConfiguration{

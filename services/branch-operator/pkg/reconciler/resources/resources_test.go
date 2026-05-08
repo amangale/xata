@@ -227,17 +227,21 @@ func TestObjectStoreSpec(t *testing.T) {
 	t.Parallel()
 
 	testcases := []struct {
-		name            string
-		backupsBucket   string
-		backupsEndpoint string
-		retention       string
-		want            barmanPluginApi.ObjectStoreSpec
+		name             string
+		backupsBucket    string
+		backupsEndpoint  string
+		regionSecretName string
+		regionSecretKey  string
+		retention        string
+		want             barmanPluginApi.ObjectStoreSpec
 	}{
 		{
-			name:            "production mode with IAM role - bucket A",
-			backupsBucket:   "s3://prod-backup-bucket/path/to/backups",
-			backupsEndpoint: "",
-			retention:       "60d",
+			name:             "production mode with IAM role - bucket A",
+			backupsBucket:    "s3://prod-backup-bucket/path/to/backups",
+			backupsEndpoint:  "",
+			regionSecretName: "barman-dummy-secret",
+			regionSecretKey:  "dummy",
+			retention:        "60d",
 			want: barmanPluginApi.ObjectStoreSpec{
 				RetentionPolicy: "60d",
 				Configuration: apiv1.BarmanObjectStoreConfiguration{
@@ -245,6 +249,12 @@ func TestObjectStoreSpec(t *testing.T) {
 					BarmanCredentials: apiv1.BarmanCredentials{
 						AWS: &apiv1.S3Credentials{
 							InheritFromIAMRole: true,
+							RegionReference: &apiv1.SecretKeySelector{
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "barman-dummy-secret",
+								},
+								Key: "dummy",
+							},
 						},
 					},
 					Wal: &apiv1.WalBackupConfiguration{
@@ -271,10 +281,12 @@ func TestObjectStoreSpec(t *testing.T) {
 			},
 		},
 		{
-			name:            "production mode with IAM role - bucket B",
-			backupsBucket:   "s3://another-prod-bucket/different/path",
-			backupsEndpoint: "",
-			retention:       "30d",
+			name:             "production mode with IAM role - bucket without region suffix",
+			backupsBucket:    "s3://another-prod-bucket/different/path",
+			backupsEndpoint:  "",
+			regionSecretName: "custom-barman-region-secret",
+			regionSecretKey:  "region",
+			retention:        "30d",
 			want: barmanPluginApi.ObjectStoreSpec{
 				RetentionPolicy: "30d",
 				Configuration: apiv1.BarmanObjectStoreConfiguration{
@@ -282,6 +294,12 @@ func TestObjectStoreSpec(t *testing.T) {
 					BarmanCredentials: apiv1.BarmanCredentials{
 						AWS: &apiv1.S3Credentials{
 							InheritFromIAMRole: true,
+							RegionReference: &apiv1.SecretKeySelector{
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "custom-barman-region-secret",
+								},
+								Key: "region",
+							},
 						},
 					},
 					Wal: &apiv1.WalBackupConfiguration{
@@ -411,7 +429,13 @@ func TestObjectStoreSpec(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := resources.ObjectStoreSpec(tc.backupsBucket, tc.backupsEndpoint, tc.retention)
+			got := resources.ObjectStoreSpec(
+				tc.backupsBucket,
+				tc.backupsEndpoint,
+				tc.regionSecretName,
+				tc.regionSecretKey,
+				tc.retention,
+			)
 
 			require.Equal(t, tc.want, got)
 		})

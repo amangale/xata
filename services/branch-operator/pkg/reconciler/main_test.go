@@ -58,14 +58,16 @@ func TestMain(m *testing.M) {
 			Namespaces: []string{XataNamespace, XataClustersNamespace},
 			ReconcilerSetup: func(ctx context.Context, mgr ctrl.Manager) error {
 				r := &reconciler.BranchReconciler{
-					Client:            mgr.GetClient(),
-					Scheme:            mgr.GetScheme(),
-					ClustersNamespace: XataClustersNamespace,
-					BackupsBucket:     "s3://some-bucket",
-					BackupsEndpoint:   "",
-					Tolerations:       nil,
-					EnforceZone:       false,
-					ImagePullSecrets:  nil,
+					Client:                 mgr.GetClient(),
+					Scheme:                 mgr.GetScheme(),
+					ClustersNamespace:      XataClustersNamespace,
+					BackupsBucket:          "s3://some-bucket",
+					BackupsEndpoint:        "",
+					BarmanRegionSecretName: "barman-dummy-secret",
+					BarmanRegionSecretKey:  "dummy",
+					Tolerations:            nil,
+					EnforceZone:            false,
+					ImagePullSecrets:       nil,
 				}
 				return r.SetupWithManager(ctx, mgr)
 			},

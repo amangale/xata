@@ -51,6 +51,28 @@ func TestObjectStoreReconciliation(t *testing.T) {
 		})
 	})
 
+	t.Run("objectstore references the chart-managed dummy region secret", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		branch := NewBranchBuilder().
+			WithBackupRetention("1d").
+			Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			os := barmanPluginApi.ObjectStore{}
+
+			requireEventuallyNoErr(t, func() error {
+				return getK8SObject(ctx, br.Name, &os)
+			})
+
+			require.NotNil(t, os.Spec.Configuration.AWS)
+			require.NotNil(t, os.Spec.Configuration.AWS.RegionReference)
+			require.Equal(t, "barman-dummy-secret", os.Spec.Configuration.AWS.RegionReference.Name)
+			require.Equal(t, "dummy", os.Spec.Configuration.AWS.RegionReference.Key)
+		})
+	})
+
 	t.Run("objectstore is updated when Branch spec is updated", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()

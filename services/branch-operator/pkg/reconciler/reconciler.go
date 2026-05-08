@@ -43,13 +43,15 @@ const (
 // BranchReconciler reconciles a Branch object
 type BranchReconciler struct {
 	client.Client
-	Scheme            *runtime.Scheme
-	ClustersNamespace string
-	BackupsBucket     string
-	BackupsEndpoint   string
-	Tolerations       []v1.Toleration
-	EnforceZone       bool
-	ImagePullSecrets  []string
+	Scheme                 *runtime.Scheme
+	ClustersNamespace      string
+	BackupsBucket          string
+	BackupsEndpoint        string
+	BarmanRegionSecretName string
+	BarmanRegionSecretKey  string
+	Tolerations            []v1.Toleration
+	EnforceZone            bool
+	ImagePullSecrets       []string
 }
 
 // Reconcile handles reconciliation for Branch resources
