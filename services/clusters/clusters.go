@@ -232,7 +232,7 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 	}
 
 	// Build the Branch Custom Resource to be created
-	branchBuilder := NewBranchBuilder(c.config.XVolStorageClasses, c.config.XVolChildStorageClass).
+	branchBuilder := NewBranchBuilder(c.config.XVolChildStorageClass).
 		FromCreateClusterRequest(req).
 		WithOverridesFromParent(parent).
 		WithDefaultStorageSize(c.config.ClustersStorageRequest).
@@ -317,7 +317,7 @@ func (c *ClustersService) UpdatePostgresCluster(ctx context.Context, req *cluste
 	}
 
 	// Build the updated Branch Custom Resource
-	branch = NewBranchBuilder(c.config.XVolStorageClasses, c.config.XVolChildStorageClass).
+	branch = NewBranchBuilder(c.config.XVolChildStorageClass).
 		FromExistingBranch(branch).
 		WithUpdatesFrom(req).
 		WithXataUtilsPreloadLibrary().

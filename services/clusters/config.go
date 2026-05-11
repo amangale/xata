@@ -2,7 +2,6 @@ package clusters
 
 import (
 	"fmt"
-	"slices"
 )
 
 type Config struct {
@@ -15,8 +14,7 @@ type Config struct {
 	ClustersVolumeSnapshotClass string            `env:"XATA_CLUSTERS_VOLUME_SNAPSHOT_CLASS" env-description:"volumesnapshotclass to use for clusters"`
 	DiskPoolNamespace           string            `env:"XATA_DISKPOOL_NAMESPACE" env-default:"openebs" env-description:"namespace where DiskPool resources are created"`
 	EnablePooler                bool              `env:"XATA_ENABLE_POOLER" env-default:"true" env-description:"enable PgBouncer connection pooler for new branches"`
-	XVolStorageClasses          []string          `env:"XATA_XVOL_STORAGE_CLASSES" env-separator:"," env-default:"xatastor,xatastor-slot" env-description:"storage classes that use XVols"`
-	XVolChildStorageClass       string            `env:"XATA_XVOL_CHILD_STORAGE_CLASS" env-default:"xatastor-slot" env-description:"storage class assigned to child branches whose parent uses an XVol-capable storage class"`
+	XVolChildStorageClass       string            `env:"XATA_XVOL_CHILD_STORAGE_CLASS" env-default:"xatastor-slot" env-description:"storage class assigned to child branches whose parent branch uses a wakeup pool"`
 }
 
 func (cfg *Config) Validate() error {
@@ -25,9 +23,6 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.ClustersVolumeSnapshotClass == "" {
 		return fmt.Errorf("volume snapshot class is required but not set")
-	}
-	if cfg.XVolChildStorageClass != "" && !slices.Contains(cfg.XVolStorageClasses, cfg.XVolChildStorageClass) {
-		return fmt.Errorf("xvol child storage class %q must be listed in xvol storage classes", cfg.XVolChildStorageClass)
 	}
 	return nil
 }

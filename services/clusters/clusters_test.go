@@ -1608,7 +1608,6 @@ func setupTestClustersService(t *testing.T, opts ...testServiceOption) (*Cluster
 			ClustersStorageClass:        "default-storage-class",
 			ClustersVolumeSnapshotClass: "default-snapshot-class",
 			ClustersNodeSelector:        cfg.nodeSelector,
-			XVolStorageClasses:          []string{"xatastor", "xatastor-slot"},
 			XVolChildStorageClass:       "xatastor-slot",
 		},
 		kubeClient:       fakeClient,
