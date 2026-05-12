@@ -178,39 +178,37 @@ type CostSummaryMetric struct {
 }
 
 type ActivationSummaryMetrics struct {
-	TotalBranchesAllTime       int
-	AiBranchesAllTime          int
-	NonConsoleBranchesAllTime  int
-	CliBranchesAllTime         int
-	CiBranchesAllTime          int
-	TotalBranches7day          int
-	AiBranches7day             int
-	NonConsoleBranches7day     int
-	CliBranches7day            int
-	CiBranches7day             int
-	CostMetrics                map[string]CostSummaryMetric
-	PaidInvoiceCount           int
-	HasPaymentMethod           bool
-	HasPaymentMethodAddedEvent bool
+	TotalBranchesAllTime      int
+	AiBranchesAllTime         int
+	NonConsoleBranchesAllTime int
+	CliBranchesAllTime        int
+	CiBranchesAllTime         int
+	TotalBranches7day         int
+	AiBranches7day            int
+	NonConsoleBranches7day    int
+	CliBranches7day           int
+	CiBranches7day            int
+	CostMetrics               map[string]CostSummaryMetric
+	PaidInvoiceCount          int
+	HasPaymentMethod          bool
 }
 
 // This is a summary event that we generate from data warehouse data
 func NewActivationSummaryEvent(organizationID string, metrics ActivationSummaryMetrics) Event {
 	properties := map[string]any{
-		"organization":               organizationID,
-		"totalBranchesAllTime":       metrics.TotalBranchesAllTime,
-		"aiBranchesAllTime":          metrics.AiBranchesAllTime,
-		"nonConsoleBranchesAllTime":  metrics.NonConsoleBranchesAllTime,
-		"cliBranchesAllTime":         metrics.CliBranchesAllTime,
-		"ciBranchesAllTime":          metrics.CiBranchesAllTime,
-		"totalBranches7day":          metrics.TotalBranches7day,
-		"aiBranches7day":             metrics.AiBranches7day,
-		"nonConsoleBranches7day":     metrics.NonConsoleBranches7day,
-		"cliBranches7day":            metrics.CliBranches7day,
-		"ciBranches7day":             metrics.CiBranches7day,
-		"paidInvoiceCount":           metrics.PaidInvoiceCount,
-		"hasPaymentMethod":           metrics.HasPaymentMethod,
-		"hasPaymentMethodAddedEvent": metrics.HasPaymentMethodAddedEvent,
+		"organization":              organizationID,
+		"totalBranchesAllTime":      metrics.TotalBranchesAllTime,
+		"aiBranchesAllTime":         metrics.AiBranchesAllTime,
+		"nonConsoleBranchesAllTime": metrics.NonConsoleBranchesAllTime,
+		"cliBranchesAllTime":        metrics.CliBranchesAllTime,
+		"ciBranchesAllTime":         metrics.CiBranchesAllTime,
+		"totalBranches7day":         metrics.TotalBranches7day,
+		"aiBranches7day":            metrics.AiBranches7day,
+		"nonConsoleBranches7day":    metrics.NonConsoleBranches7day,
+		"cliBranches7day":           metrics.CliBranches7day,
+		"ciBranches7day":            metrics.CiBranches7day,
+		"paidInvoiceCount":          metrics.PaidInvoiceCount,
+		"hasPaymentMethod":          metrics.HasPaymentMethod,
 	}
 	addCostSummaryProperties(properties, metrics.CostMetrics)
 	return Event{
