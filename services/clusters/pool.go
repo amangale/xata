@@ -2,15 +2,14 @@ package clusters
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	cpv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
@@ -51,7 +50,7 @@ func findPoolCluster(ctx context.Context, kubeClient client.Client, clusterReade
 			continue
 		}
 
-		cluster, err := findAvailableClusterInPool(ctx, clusterReader, namespace, pool)
+		cluster, err := findAvailableClusterInPool(ctx, kubeClient, clusterReader, namespace, pool)
 		if err != nil {
 			return "", nil, fmt.Errorf("find available cluster in pool %s: %w", pool.Name, err)
 		}
@@ -81,10 +80,16 @@ var (
 // findAvailableClusterInPool polls for a healthy cluster in the given pool,
 // waiting up to poolClusterWaitTimeout. A short wait is used because the pool
 // operator continuously replenishes clusters, so one may become ready shortly.
-func findAvailableClusterInPool(ctx context.Context, clusterReader client.Reader, namespace string, pool *cpv1alpha1.ClusterPool) (*apiv1.Cluster, error) {
+func findAvailableClusterInPool(
+	ctx context.Context,
+	kubeClient client.Client,
+	clusterReader client.Reader,
+	namespace string,
+	pool *cpv1alpha1.ClusterPool,
+) (*apiv1.Cluster, error) {
 	deadline := time.Now().Add(poolClusterWaitTimeout)
 	for {
-		cluster, err := findHealthyClusterInPool(ctx, clusterReader, namespace, pool)
+		cluster, err := findHealthyClusterInPool(ctx, kubeClient, clusterReader, namespace, pool)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +109,13 @@ func findAvailableClusterInPool(ctx context.Context, clusterReader client.Reader
 
 // findHealthyClusterInPool returns the first cluster owned by the pool that is
 // in the Healthy phase and not being deleted.
-func findHealthyClusterInPool(ctx context.Context, clusterReader client.Reader, namespace string, pool *cpv1alpha1.ClusterPool) (*apiv1.Cluster, error) {
+func findHealthyClusterInPool(
+	ctx context.Context,
+	kubeClient client.Client,
+	clusterReader client.Reader,
+	namespace string,
+	pool *cpv1alpha1.ClusterPool,
+) (*apiv1.Cluster, error) {
 	var clusters apiv1.ClusterList
 	if err := clusterReader.List(ctx, &clusters,
 		client.InNamespace(namespace),
@@ -119,6 +130,14 @@ func findHealthyClusterInPool(ctx context.Context, clusterReader client.Reader, 
 			continue
 		}
 		if cluster.Status.ReadyInstances > 0 {
+			if err := orphanCluster(ctx, kubeClient, cluster); err != nil {
+				if apierrors.IsConflict(err) {
+					// A conflict indicates that another caller claimed the cluster
+					// concurrently
+					continue
+				}
+				return nil, fmt.Errorf("orphan cluster %s: %w", cluster.Name, err)
+			}
 			return cluster, nil
 		}
 	}
@@ -141,18 +160,15 @@ func extractPostgresMajor(imageName string) string {
 
 // orphanCluster removes the cluster from its pool by clearing its
 // ownerReferences. This prevents the pool operator from managing or deleting
-// the cluster once it has been assigned to a branch.
+// the cluster once it has been assigned to a branch. The patch uses
+// optimistic concurrency control: if the cluster's resourceVersion has
+// changed since it was read (e.g. another caller claimed it concurrently),
+// the API server returns a Conflict error.
 func orphanCluster(ctx context.Context, kubeClient client.Client, cluster *apiv1.Cluster) error {
-	patch, err := json.Marshal(map[string]any{
-		"metadata": map[string]any{
-			"ownerReferences": nil,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("marshal patch: %w", err)
-	}
+	patch := client.MergeFromWithOptions(cluster.DeepCopy(), client.MergeFromWithOptimisticLock{})
+	cluster.OwnerReferences = nil
 
-	if err := kubeClient.Patch(ctx, cluster, client.RawPatch(types.MergePatchType, patch)); err != nil {
+	if err := kubeClient.Patch(ctx, cluster, patch); err != nil {
 		return fmt.Errorf("patch cluster %s: %w", cluster.Name, err)
 	}
 

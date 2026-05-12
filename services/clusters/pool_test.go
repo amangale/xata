@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -220,6 +221,108 @@ func TestFindPoolCluster(t *testing.T) {
 	}
 }
 
+func TestFindPoolClusterConcurrent(t *testing.T) {
+	t.Parallel()
+
+	origTimeout := poolClusterWaitTimeout
+	origInterval := poolClusterPollInterval
+	poolClusterWaitTimeout = 100 * time.Millisecond
+	poolClusterPollInterval = 10 * time.Millisecond
+	t.Cleanup(func() {
+		poolClusterWaitTimeout = origTimeout
+		poolClusterPollInterval = origInterval
+	})
+
+	const (
+		namespace    = "xata-clusters"
+		storageClass = "default-storage-class"
+		image        = "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5"
+		cpuRequest   = "2"
+		memory       = "4Gi"
+		concurrency  = 10
+	)
+	poolUID := types.UID("pool-uid-123")
+
+	pool := &cpv1alpha1.ClusterPool{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pool",
+			Namespace: namespace,
+			UID:       poolUID,
+		},
+		Spec: cpv1alpha1.ClusterPoolSpec{
+			Clusters: 1,
+			ClusterSpec: apiv1.ClusterSpec{
+				ImageName: image,
+				StorageConfiguration: apiv1.StorageConfiguration{
+					StorageClass: new(storageClass),
+				},
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse(cpuRequest),
+						corev1.ResourceMemory: resource.MustParse(memory),
+					},
+				},
+			},
+		},
+	}
+
+	cluster := &apiv1.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pool-cluster-1",
+			Namespace: namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: cpv1alpha1.GroupVersion.String(),
+					Kind:       cpv1alpha1.ClusterPoolKind,
+					UID:        poolUID,
+					Name:       "test-pool",
+					Controller: new(true),
+				},
+			},
+		},
+		Status: apiv1.ClusterStatus{
+			Phase:          apiv1.PhaseHealthy,
+			ReadyInstances: 1,
+		},
+	}
+
+	k8sClient := newPoolTestClient(t, pool, cluster)
+
+	type result struct {
+		poolName string
+		cluster  *apiv1.Cluster
+		err      error
+	}
+	results := make([]result, concurrency)
+
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := range concurrency {
+		wg.Go(func() {
+			<-start
+			poolName, c, err := findPoolCluster(context.Background(), k8sClient, k8sClient, namespace, storageClass, image, cpuRequest, memory)
+			results[i] = result{poolName: poolName, cluster: c, err: err}
+		})
+	}
+	close(start)
+	wg.Wait()
+
+	winners := 0
+	for _, r := range results {
+		require.NoError(t, r.err)
+		if r.cluster != nil {
+			winners++
+			require.Equal(t, "pool-cluster-1", r.cluster.Name)
+			require.Equal(t, "test-pool", r.poolName)
+		}
+	}
+	require.Equal(t, 1, winners, "exactly one caller should win the claim")
+
+	updated := &apiv1.Cluster{}
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), updated))
+	require.Empty(t, updated.OwnerReferences, "winning cluster should have owner references cleared")
+}
+
 func TestOrphanCluster(t *testing.T) {
 	t.Parallel()
 
@@ -379,7 +482,7 @@ func TestFindHealthyClusterInPool(t *testing.T) {
 			ctx := context.Background()
 			k8sClient := newPoolTestClient(t, tt.objects...)
 
-			got, err := findHealthyClusterInPool(ctx, k8sClient, namespace, pool)
+			got, err := findHealthyClusterInPool(ctx, k8sClient, k8sClient, namespace, pool)
 			require.NoError(t, err)
 
 			if tt.wantName == "" {

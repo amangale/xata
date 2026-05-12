@@ -286,9 +286,6 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 			Str("poolName", poolName).
 			Msg("pool cluster search result")
 		if poolCluster != nil {
-			if err := orphanCluster(ctx, c.kubeClient, poolCluster); err != nil {
-				return nil, fmt.Errorf("orphan pool cluster: %w", err)
-			}
 			branchBuilder.WithClusterFromPool(poolCluster.Name, wakeupPoolName(poolName))
 		}
 	}
