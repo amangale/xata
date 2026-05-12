@@ -391,9 +391,13 @@ func newSpanMiddleware(
 			}
 
 			agentRaw := c.Request().Header.Get(headerXAgent)
-			if customHeaderValid(agentRaw) {
-				headers := clienthttpheaders.NewParsedHeaders(c.Request().UserAgent(), agentRaw)
-				ctx = clienthttpheaders.NewContext(ctx, headers)
+			if !customHeaderValid(agentRaw) {
+				// don't process invalid X-Xata-Agent headers
+				agentRaw = ""
+			}
+			headers := clienthttpheaders.NewParsedHeaders(c.Request().UserAgent(), agentRaw)
+			ctx = clienthttpheaders.NewContext(ctx, headers)
+			if agentRaw != "" {
 				span.SetAttributes(attribute.String(keyLogAgent, agentRaw))
 				if headers.XataAgent.Client != "" {
 					span.SetAttributes(attribute.String(keyLogAgent+".client", headers.XataAgent.Client))
