@@ -19,6 +19,10 @@ func TestGRPCErrorLogLevel(t *testing.T) {
 			err:  status.Error(codes.NotFound, "missing"),
 			want: zerolog.WarnLevel,
 		},
+		"aborted": {
+			err:  status.Error(codes.Aborted, "conflict: the object has been modified"),
+			want: zerolog.WarnLevel,
+		},
 		"permission denied": {
 			err:  status.Error(codes.PermissionDenied, "denied"),
 			want: zerolog.ErrorLevel,

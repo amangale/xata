@@ -213,7 +213,8 @@ func grpcLogEvent(logger *zerolog.Logger, err error, successEvent func() *zerolo
 }
 
 func grpcLogLevel(err error) zerolog.Level {
-	if status.Code(err) == codes.NotFound {
+	switch status.Code(err) {
+	case codes.Aborted, codes.NotFound:
 		return zerolog.WarnLevel
 	}
 	return zerolog.ErrorLevel
