@@ -461,6 +461,7 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 			expectedBranchFn: func(b *v1alpha1.Branch) {
 				b.Spec.ClusterSpec.Storage.StorageClass = new("xatastor")
+				b.Spec.ClusterSpec.Storage.VolumeSnapshotClass = new("xatastor")
 			},
 		},
 		{
@@ -483,6 +484,7 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 			expectedBranchFn: func(b *v1alpha1.Branch) {
 				b.Spec.ClusterSpec.Storage.StorageClass = new("xatastor")
+				b.Spec.ClusterSpec.Storage.VolumeSnapshotClass = new("xatastor")
 				b.Spec.ClusterSpec.Name = new("pool-cluster-1")
 				b.Spec.BackupSpec = nil
 				b.Annotations = map[string]string{v1alpha1.WakeupPoolAnnotation: "test-pool-slot"}
@@ -501,6 +503,7 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 			expectedBranchFn: func(b *v1alpha1.Branch) {
 				b.Spec.ClusterSpec.Storage.StorageClass = new("xatastor")
+				b.Spec.ClusterSpec.Storage.VolumeSnapshotClass = new("xatastor")
 			},
 		},
 		{

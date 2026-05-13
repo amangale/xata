@@ -258,8 +258,10 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 	// Child branches always inherit from the parent (handled by
 	// WithOverridesFromParent below) so we only apply the override for roots.
 	storageClass := c.config.ClustersStorageClass
+	volumeSnapshotClass := c.config.ClustersVolumeSnapshotClass
 	if req.GetUseXatastor() && c.config.XatastorEnabled && parent == nil {
 		storageClass = "xatastor"
+		volumeSnapshotClass = "xatastor"
 		log.Ctx(ctx).Info().Str("branchID", req.GetId()).Msg("using xatastor storage class for root cluster")
 	}
 
@@ -269,7 +271,7 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		WithOverridesFromParent(parent).
 		WithDefaultStorageSize(c.config.ClustersStorageRequest).
 		WithDefaultStorageClass(storageClass).
-		WithDefaultVolumeSnapshotClass(c.config.ClustersVolumeSnapshotClass).
+		WithDefaultVolumeSnapshotClass(volumeSnapshotClass).
 		WithDefaultNodeSelector(c.config.ClustersNodeSelector).
 		WithPooler(c.config.EnablePooler).
 		WithXataUtilsPreloadLibrary().
