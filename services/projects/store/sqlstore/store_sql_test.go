@@ -15,7 +15,6 @@ import (
 
 	"xata/services/projects/store"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -34,14 +33,14 @@ func TestSQLStore(t *testing.T) {
 	t.Run("projects", func(t *testing.T) {
 		// create project with empty name fails
 		_, err := sqlStore.CreateProject(ctx, "organizationID", createProjectConfig("", nil))
-		assert.Error(t, err)
-		assert.Equal(t, err, store.ErrInvalidProjectName{Name: ""})
+		require.Error(t, err)
+		require.Equal(t, err, store.ErrInvalidProjectName{Name: ""})
 
 		// test projects CRUD
 		project, err := sqlStore.CreateProject(ctx, "organizationID", createProjectConfig("projectName", nil))
-		assert.NoError(t, err)
-		assert.Equal(t, "projectName", project.Name)
-		assert.True(t, len(project.ID) > 10 && strings.HasPrefix(project.ID, "prj_"))
+		require.NoError(t, err)
+		require.Equal(t, "projectName", project.Name)
+		require.True(t, len(project.ID) > 10 && strings.HasPrefix(project.ID, "prj_"))
 
 		// create project with non default scale to zero configuration
 		anotherProject, err := sqlStore.CreateProject(ctx, "organizationID", createProjectConfig("anotherProject", &store.ProjectScaleToZero{
@@ -54,9 +53,9 @@ func TestSQLStore(t *testing.T) {
 				InactivityPeriod: store.InactivityPeriod(time.Minute * 15),
 			},
 		}))
-		assert.NoError(t, err)
-		assert.Equal(t, "anotherProject", anotherProject.Name)
-		assert.Equal(t, store.ProjectScaleToZero{
+		require.NoError(t, err)
+		require.Equal(t, "anotherProject", anotherProject.Name)
+		require.Equal(t, store.ProjectScaleToZero{
 			BaseBranches: store.ScaleToZero{
 				Enabled:          false,
 				InactivityPeriod: store.InactivityPeriod(time.Minute * 40),
@@ -66,46 +65,46 @@ func TestSQLStore(t *testing.T) {
 				InactivityPeriod: store.InactivityPeriod(time.Minute * 15),
 			},
 		}, anotherProject.ScaleToZero)
-		assert.True(t, len(anotherProject.ID) > 10 && strings.HasPrefix(anotherProject.ID, "prj_"))
+		require.True(t, len(anotherProject.ID) > 10 && strings.HasPrefix(anotherProject.ID, "prj_"))
 
 		// create project with same name fails
 		_, err = sqlStore.CreateProject(ctx, "organizationID", createProjectConfig("projectName", nil))
-		assert.Error(t, err)
-		assert.Equal(t, err, store.ErrProjectAlreadyExists{
+		require.Error(t, err)
+		require.Equal(t, err, store.ErrProjectAlreadyExists{
 			Name: "projectName",
 		})
 
 		// get project
 		newP, err := sqlStore.GetProject(ctx, "organizationID", project.ID)
-		assert.NoError(t, err)
-		assert.Equal(t, *project, *newP)
+		require.NoError(t, err)
+		require.Equal(t, *project, *newP)
 
 		// list project
 		projects, err := sqlStore.ListProjects(ctx, "organizationID")
-		assert.NoError(t, err)
-		assert.Len(t, projects, 2)
-		assert.ElementsMatch(t, []store.Project{*project, *anotherProject}, projects)
+		require.NoError(t, err)
+		require.Len(t, projects, 2)
+		require.ElementsMatch(t, []store.Project{*project, *anotherProject}, projects)
 
 		// unknown organization has no projects
 		projects, err = sqlStore.ListProjects(ctx, "unknownOrganizationID")
-		assert.NoError(t, err)
-		assert.Len(t, projects, 0)
+		require.NoError(t, err)
+		require.Len(t, projects, 0)
 
 		// unknown project returns an error
 		_, err = sqlStore.GetProject(ctx, "organizationID", "unknownProjectID")
-		assert.Equal(t, err, store.ErrProjectNotFound{ID: "unknownProjectID"})
+		require.Equal(t, err, store.ErrProjectNotFound{ID: "unknownProjectID"})
 
 		// update project no changes
 		newP, err = sqlStore.UpdateProject(ctx, "organizationID", project.ID, updateProjectConfig(nil, nil))
-		assert.NoError(t, err)
-		assert.Equal(t, "projectName", newP.Name)
-		assert.True(t, project.UpdatedAt.Equal(newP.UpdatedAt))
+		require.NoError(t, err)
+		require.Equal(t, "projectName", newP.Name)
+		require.True(t, project.UpdatedAt.Equal(newP.UpdatedAt))
 
 		// update project name
 		newP, err = sqlStore.UpdateProject(ctx, "organizationID", project.ID, updateProjectConfig(new("newProjectName"), nil))
-		assert.NoError(t, err)
-		assert.Equal(t, "newProjectName", newP.Name)
-		assert.True(t, project.UpdatedAt.Before(newP.UpdatedAt))
+		require.NoError(t, err)
+		require.Equal(t, "newProjectName", newP.Name)
+		require.True(t, project.UpdatedAt.Before(newP.UpdatedAt))
 
 		// update project scale to zero configuration
 		newP, err = sqlStore.UpdateProject(ctx, "organizationID", project.ID, updateProjectConfig(new(""), &store.ProjectScaleToZero{
@@ -115,55 +114,55 @@ func TestSQLStore(t *testing.T) {
 				InactivityPeriod: store.InactivityPeriod(time.Minute * 15),
 			},
 		}))
-		assert.NoError(t, err)
-		assert.Equal(t, store.ProjectScaleToZero{
+		require.NoError(t, err)
+		require.Equal(t, store.ProjectScaleToZero{
 			BaseBranches: defaultScaleToZeroConfig(),
 			ChildBranches: store.ScaleToZero{
 				Enabled:          true,
 				InactivityPeriod: store.InactivityPeriod(time.Minute * 15),
 			},
 		}, newP.ScaleToZero)
-		assert.True(t, project.UpdatedAt.Before(newP.UpdatedAt))
+		require.True(t, project.UpdatedAt.Before(newP.UpdatedAt))
 
 		// update project to already existing name
 		sameNamePrj, err := sqlStore.CreateProject(ctx, "organizationID", createProjectConfig("updatedName", nil))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		_, err = sqlStore.UpdateProject(ctx, "organizationID", project.ID, updateProjectConfig(new("updatedName"), nil))
-		assert.Error(t, err)
-		assert.Equal(t, err, store.ErrProjectAlreadyExists{Name: "updatedName"})
+		require.Error(t, err)
+		require.Equal(t, err, store.ErrProjectAlreadyExists{Name: "updatedName"})
 
 		// delete projects
 		err = sqlStore.DeleteProject(ctx, "organizationID", sameNamePrj.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		// delete project
 		err = sqlStore.DeleteProject(ctx, "organizationID", project.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		err = sqlStore.DeleteProject(ctx, "organizationID", anotherProject.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// project is deleted
 		projects, err = sqlStore.ListProjects(ctx, "organizationID")
-		assert.NoError(t, err)
-		assert.Len(t, projects, 0)
+		require.NoError(t, err)
+		require.Len(t, projects, 0)
 
 		newP, err = sqlStore.GetProject(ctx, "organizationID", project.ID)
-		assert.Nil(t, newP)
-		assert.Equal(t, err, store.ErrProjectNotFound{ID: project.ID})
+		require.Nil(t, newP)
+		require.Equal(t, err, store.ErrProjectNotFound{ID: project.ID})
 
 		// unknown project returns an error
 		err = sqlStore.DeleteProject(ctx, "organizationID", "unknownProjectID")
-		assert.Equal(t, err, store.ErrProjectNotFound{ID: "unknownProjectID"})
+		require.Equal(t, err, store.ErrProjectNotFound{ID: "unknownProjectID"})
 	})
 
 	// project deletion tests
 	deletePrj, err := sqlStore.CreateProject(ctx, "organizationID", createProjectConfig("testDeletePrj", nil))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	otherPrj, err := sqlStore.CreateProject(ctx, "otherWS", createProjectConfig("other", nil))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	fullProject, err := sqlStore.CreateProject(ctx, "organizationID", createProjectConfig("fullPrj", nil))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// branch-related tests
 	createRegionAndCell(t, sqlStore, "region", "cell")
@@ -171,7 +170,7 @@ func TestSQLStore(t *testing.T) {
 	_, err = sqlStore.CreateBranch(ctx, "organizationID", fullProject.ID, "cell", createBranchConfig("filling", nil, nil), func(b *store.Branch) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	projectNotFoundErr := store.ErrProjectNotFound{ID: otherPrj.ID}
 	projectNotEmptyErr := store.ErrProjectNotEmpty{ID: fullProject.ID}
@@ -205,10 +204,10 @@ func TestSQLStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err = sqlStore.DeleteProject(ctx, "organizationID", tt.projectID)
 			if tt.wantError {
-				assert.Error(t, err)
-				assert.Equal(t, tt.errorMessage, err.Error())
+				require.Error(t, err)
+				require.Equal(t, tt.errorMessage, err.Error())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -228,7 +227,7 @@ func TestSQLStore(t *testing.T) {
 		var count int
 		err = sqlStore.sql.QueryRow("SELECT COUNT(*) FROM backups WHERE project_id = $1", prj.ID).Scan(&count)
 		require.NoError(t, err)
-		assert.Equal(t, 1, count)
+		require.Equal(t, 1, count)
 
 		// Delete the project - should succeed and clean up the orphaned backup
 		err = sqlStore.DeleteProject(ctx, "organizationID", prj.ID)
@@ -237,19 +236,19 @@ func TestSQLStore(t *testing.T) {
 		// Verify the backup was cleaned up
 		err = sqlStore.sql.QueryRow("SELECT COUNT(*) FROM backups WHERE project_id = $1", prj.ID).Scan(&count)
 		require.NoError(t, err)
-		assert.Equal(t, 0, count)
+		require.Equal(t, 0, count)
 	})
 
 	project, err := sqlStore.CreateProject(ctx, "organizationID", createProjectConfig("projectName", nil))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	altProject, err := sqlStore.CreateProject(ctx, "otherWS", createProjectConfig("projectName", nil))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	parent, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("parent", nil, nil), func(b *store.Branch) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	fakeParentID := "fakeID"
 
@@ -407,39 +406,39 @@ func TestSQLStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.name == "create branch fails for existing branch name" {
 				branch, err := sqlStore.CreateBranch(ctx, tt.organizationID, tt.projectID, "cell", createBranchConfig(tt.branchName, nil, nil), tt.callbackFunc)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.branchName, branch.Name)
+				require.NoError(t, err)
+				require.Equal(t, tt.branchName, branch.Name)
 			}
 			branch, err := sqlStore.CreateBranch(ctx, tt.organizationID, tt.projectID, "cell", createBranchConfig(tt.branchName, tt.parentID, tt.description), tt.callbackFunc)
 			if !tt.wantError {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.branchName, branch.Name)
-				assert.True(t, len(branch.ID) > 10)
-				assert.Equal(t, branch, gotBranch)
+				require.NoError(t, err)
+				require.Equal(t, tt.branchName, branch.Name)
+				require.True(t, len(branch.ID) > 10)
+				require.Equal(t, branch, gotBranch)
 				if tt.parentID != nil {
-					assert.Equal(t, int32(2), branch.Depth)
-					assert.Equal(t, *tt.parentID, *branch.ParentID)
+					require.Equal(t, int32(2), branch.Depth)
+					require.Equal(t, *tt.parentID, *branch.ParentID)
 				} else {
-					assert.Equal(t, int32(1), branch.Depth)
-					assert.Nil(t, branch.ParentID)
+					require.Equal(t, int32(1), branch.Depth)
+					require.Nil(t, branch.ParentID)
 				}
 			} else {
-				assert.Error(t, err)
-				assert.Nil(t, branch)
-				assert.Equal(t, tt.errorMessage, err.Error())
+				require.Error(t, err)
+				require.Nil(t, branch)
+				require.Equal(t, tt.errorMessage, err.Error())
 			}
 		})
 	}
 
 	// list branches project
 	listProject, err := sqlStore.CreateProject(ctx, "organizationID", createProjectConfig("listProject", nil))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	var listBranches []store.Branch
 	for i := range 5 {
 		branch, err := sqlStore.CreateBranch(ctx, "organizationID", listProject.ID, "cell", createBranchConfig("listBranch"+strconv.Itoa(i), nil, nil), func(b *store.Branch) error {
 			return nil
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		listBranches = append(listBranches, *branch)
 	}
 
@@ -470,23 +469,23 @@ func TestSQLStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			branches, err := sqlStore.ListBranches(ctx, tt.organizationID, tt.projectID)
 			if !tt.wantError {
-				assert.NoError(t, err)
-				assert.Equal(t, len(tt.branches), len(branches))
+				require.NoError(t, err)
+				require.Equal(t, len(tt.branches), len(branches))
 				for i := range tt.branches {
-					assert.True(t, slices.ContainsFunc(branches, func(branch store.Branch) bool {
+					require.True(t, slices.ContainsFunc(branches, func(branch store.Branch) bool {
 						return branch.ID == tt.branches[i].ID
 					}))
-					assert.True(t, slices.ContainsFunc(branches, func(branch store.Branch) bool {
+					require.True(t, slices.ContainsFunc(branches, func(branch store.Branch) bool {
 						return branch.Name == tt.branches[i].Name
 					}))
-					assert.True(t, slices.ContainsFunc(branches, func(branch store.Branch) bool {
+					require.True(t, slices.ContainsFunc(branches, func(branch store.Branch) bool {
 						return branch.ParentID == tt.branches[i].ParentID
 					}))
 				}
 			} else {
-				assert.Error(t, err)
-				assert.Empty(t, branches)
-				assert.Equal(t, tt.errorMessage, err.Error())
+				require.Error(t, err)
+				require.Empty(t, branches)
+				require.Equal(t, tt.errorMessage, err.Error())
 			}
 		})
 	}
@@ -495,7 +494,7 @@ func TestSQLStore(t *testing.T) {
 	branch, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("describeBranch", nil, nil), func(b *store.Branch) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// The region is created with BackupsEnabled: true, so we need to update the expected value
 	branch.BackupsEnabled = true
 
@@ -536,12 +535,12 @@ func TestSQLStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			storedBranch, err := sqlStore.DescribeBranch(ctx, tt.organizationID, tt.projectID, tt.branchID)
 			if !tt.wantError {
-				assert.NoError(t, err)
-				assert.Equal(t, branch, storedBranch)
+				require.NoError(t, err)
+				require.Equal(t, branch, storedBranch)
 			} else {
-				assert.Error(t, err)
-				assert.Nil(t, storedBranch)
-				assert.Equal(t, tt.errorMessage, err.Error())
+				require.Error(t, err)
+				require.Nil(t, storedBranch)
+				require.Equal(t, tt.errorMessage, err.Error())
 			}
 		})
 	}
@@ -583,12 +582,12 @@ func TestSQLStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			storedBranch, err := sqlStore.GetBranchByName(ctx, tt.organizationID, tt.projectID, tt.branchName)
 			if !tt.wantError {
-				assert.NoError(t, err)
-				assert.Equal(t, branch, storedBranch)
+				require.NoError(t, err)
+				require.Equal(t, branch, storedBranch)
 			} else {
-				assert.Error(t, err)
-				assert.Nil(t, storedBranch)
-				assert.Equal(t, tt.errorMessage, err.Error())
+				require.Error(t, err)
+				require.Nil(t, storedBranch)
+				require.Equal(t, tt.errorMessage, err.Error())
 			}
 		})
 	}
@@ -597,17 +596,17 @@ func TestSQLStore(t *testing.T) {
 	branch, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("updateBranch", nil, nil), func(b *store.Branch) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("alreadyExists", nil, nil), func(b *store.Branch) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// create a branch in a foreign project (different org) used for cross-tenant regression tests
 	foreignBranch, err := sqlStore.CreateBranch(ctx, "otherWS", altProject.ID, "cell", createBranchConfig("foreignBranch", nil, nil), func(b *store.Branch) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	branchUpdateTests := []struct {
 		name                string
@@ -706,17 +705,17 @@ func TestSQLStore(t *testing.T) {
 				return nil
 			})
 			if !tt.wantError {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				if tt.branchName != nil {
-					assert.Equal(t, *tt.branchName, updatedBranch.Name)
+					require.Equal(t, *tt.branchName, updatedBranch.Name)
 				}
 				if tt.branchDescription != nil {
-					assert.Equal(t, *tt.branchDescription, *updatedBranch.Description)
+					require.Equal(t, *tt.branchDescription, *updatedBranch.Description)
 				}
 			} else {
-				assert.Error(t, err)
-				assert.Nil(t, updatedBranch)
-				assert.Equal(t, tt.errorMessage, err.Error())
+				require.Error(t, err)
+				require.Nil(t, updatedBranch)
+				require.Equal(t, tt.errorMessage, err.Error())
 			}
 		})
 	}
@@ -725,7 +724,7 @@ func TestSQLStore(t *testing.T) {
 	branch, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("deleteBranch", nil, nil), func(b *store.Branch) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	branchDeleteTests := []struct {
 		name           string
@@ -785,10 +784,10 @@ func TestSQLStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := sqlStore.DeleteBranch(ctx, tt.organizationID, tt.projectID, tt.branchID, tt.callbackFunc)
 			if !tt.wantError {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
-				assert.Error(t, err)
-				assert.Equal(t, tt.errorMessage, err.Error())
+				require.Error(t, err)
+				require.Equal(t, tt.errorMessage, err.Error())
 			}
 		})
 	}
@@ -864,67 +863,145 @@ func TestSQLStore(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("org_limits", func(t *testing.T) {
+		const orgID = "test-org"
+		const projectID = "test-project"
+
+		t.Run("empty returns no overrides", func(t *testing.T) {
+			limits, err := sqlStore.GetOrgLimits(ctx, orgID, projectID)
+			require.NoError(t, err)
+			require.Empty(t, limits)
+		})
+
+		t.Run("set and get org-level", func(t *testing.T) {
+			tests := map[string]struct {
+				key   store.LimitKey
+				value any
+				want  any
+			}{
+				"integer": {key: store.LimitMaxBranchesPerProject, value: int64(200), want: int64(200)},
+				"string":  {key: store.LimitMaxAllowedInstanceType, value: "xata.large", want: "xata.large"},
+			}
+			for name, tc := range tests {
+				t.Run(name, func(t *testing.T) {
+					require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, "", tc.key, tc.value))
+					limits, err := sqlStore.GetOrgLimits(ctx, orgID, "")
+					require.NoError(t, err)
+					got, ok := limits[tc.key]
+					require.True(t, ok)
+					require.Equal(t, tc.want, jsonNumberToInt(got))
+				})
+			}
+		})
+
+		t.Run("project overrides org", func(t *testing.T) {
+			require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, "", store.LimitMaxBranchesPerProject, int64(100)))
+			require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, projectID, store.LimitMaxBranchesPerProject, int64(500)))
+			limits, err := sqlStore.GetOrgLimits(ctx, orgID, projectID)
+			require.NoError(t, err)
+			require.Equal(t, int64(500), jsonNumberToInt(limits[store.LimitMaxBranchesPerProject]))
+		})
+
+		t.Run("org-level fallback when no project override", func(t *testing.T) {
+			require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, "", store.LimitMaxProjects, int64(10)))
+			limits, err := sqlStore.GetOrgLimits(ctx, orgID, "other-project")
+			require.NoError(t, err)
+			require.Equal(t, int64(10), jsonNumberToInt(limits[store.LimitMaxProjects]))
+		})
+
+		t.Run("overwrite updates value", func(t *testing.T) {
+			require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, "", store.LimitMaxBranchesPerProject, int64(1)))
+			require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, "", store.LimitMaxBranchesPerProject, int64(999)))
+			limits, err := sqlStore.GetOrgLimits(ctx, orgID, "")
+			require.NoError(t, err)
+			require.Equal(t, int64(999), jsonNumberToInt(limits[store.LimitMaxBranchesPerProject]))
+		})
+
+		t.Run("delete org-level override", func(t *testing.T) {
+			require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, "", store.LimitMaxBranchesPerProject, int64(50)))
+			require.NoError(t, sqlStore.DeleteOrgLimit(ctx, orgID, "", store.LimitMaxBranchesPerProject))
+			limits, err := sqlStore.GetOrgLimits(ctx, orgID, "")
+			require.NoError(t, err)
+			_, ok := limits[store.LimitMaxBranchesPerProject]
+			require.False(t, ok)
+		})
+
+		t.Run("delete project-level falls back to org", func(t *testing.T) {
+			require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, "", store.LimitMaxBranchesPerProject, int64(100)))
+			require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, projectID, store.LimitMaxBranchesPerProject, int64(500)))
+			require.NoError(t, sqlStore.DeleteOrgLimit(ctx, orgID, projectID, store.LimitMaxBranchesPerProject))
+			limits, err := sqlStore.GetOrgLimits(ctx, orgID, projectID)
+			require.NoError(t, err)
+			require.Equal(t, int64(100), jsonNumberToInt(limits[store.LimitMaxBranchesPerProject]))
+		})
+
+		t.Run("invalid key is rejected", func(t *testing.T) {
+			err := sqlStore.SetOrgLimit(ctx, orgID, "", store.LimitKey("max_members"), int64(1))
+			require.Error(t, err)
+		})
+	})
 }
 
 func createProjectAndBranchesForLimitTest(t *testing.T, ctx context.Context, sqlStore *sqlProjectStore, orgID string, name string) (project *store.Project, cleanup func()) {
 	project, err := sqlStore.CreateProject(ctx, orgID, createProjectConfig(name, nil))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	for i := range store.MaxBranchesPerProject {
 		_, err := sqlStore.CreateBranch(ctx, orgID, project.ID, "cell", createBranchConfig(fmt.Sprintf("br%d", i), nil, nil), func(b *store.Branch) error {
 			return nil
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	return project, func() {
 		deleteBranches(t, ctx, sqlStore, orgID, project.ID)
 		err := sqlStore.DeleteProject(ctx, orgID, project.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 }
 
 func createProjectAndBranchesForDepthTest(t *testing.T, ctx context.Context, sqlStore *sqlProjectStore, orgID string, name string) (project *store.Project, depthBranch *store.Branch, childrenBranch *store.Branch, cleanup func()) {
 	project, err := sqlStore.CreateProject(ctx, orgID, createProjectConfig(name, nil))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// create a parent branch
 	parent, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("b1", nil, nil), noopProvisionFunc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// add first child
 	childrenBranch, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("b11", &parent.ID, nil), noopProvisionFunc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Add children until about to hit the limit
 	_, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("b111", &childrenBranch.ID, nil), noopProvisionFunc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("b112", &childrenBranch.ID, nil), noopProvisionFunc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// Creating b113 should fail
 
 	// Add nested children until about to hit the limit
 	b12, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("b12", &parent.ID, nil), noopProvisionFunc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	depthBranch, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("b121", &b12.ID, nil), noopProvisionFunc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// creating b1211 should fail
 
 	return project, depthBranch, childrenBranch, func() {
 		deleteBranches(t, ctx, sqlStore, orgID, project.ID)
 		err := sqlStore.DeleteProject(ctx, orgID, project.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 }
 
 func deleteBranches(t *testing.T, ctx context.Context, sqlStore *sqlProjectStore, orgID, projectID string) {
 	branches, err := sqlStore.ListBranches(ctx, orgID, projectID)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	for _, branch := range branches {
 		err := sqlStore.DeleteBranch(ctx, orgID, projectID, branch.ID, func(*store.Branch) error {
 			return nil
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 }
 
@@ -949,7 +1026,7 @@ func setupSQLStore(ctx context.Context, t *testing.T, maxDepth, maxChildren int3
 
 	// create a new SQL sqlStore
 	config, err := ConfigFromConnectionString(postgresContainer.MustConnectionString(ctx, "sslmode=disable"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	sqlStore, err := NewSQLProjectStore(ctx, config, maxDepth, maxChildren)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
@@ -962,9 +1039,18 @@ func setupSQLStore(ctx context.Context, t *testing.T, maxDepth, maxChildren int3
 
 	// run migrations
 	err = sqlStore.Setup(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	return sqlStore
+}
+
+func jsonNumberToInt(v any) any {
+	if n, ok := v.(interface{ Int64() (int64, error) }); ok {
+		if i, err := n.Int64(); err == nil {
+			return i
+		}
+	}
+	return v
 }
 
 func noopProvisionFunc(b *store.Branch) error {

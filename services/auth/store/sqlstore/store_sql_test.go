@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -131,36 +131,36 @@ func TestSQLAuthStore(t *testing.T) {
 					if tt.name == "create key fails when limit reached" {
 						for i := range store.MaxAPIKeysPerTarget {
 							_, _, err := sqlStore.CreateAPIKey(ctx, tt.targetType, tt.targetID, &store.APIKeyCreate{Name: fmt.Sprintf("pre-%d", i)})
-							assert.NoError(t, err)
+							require.NoError(t, err)
 						}
 					}
 
 					apiKeyStr, apiKey, err := sqlStore.CreateAPIKey(ctx, tt.targetType, tt.targetID, tt.keyCreate)
 
 					if tt.wantError {
-						assert.Error(t, err)
+						require.Error(t, err)
 						if tt.errorChecker != nil {
-							assert.True(t, tt.errorChecker(err), "expected specific error type")
+							require.True(t, tt.errorChecker(err), "expected specific error type")
 						}
 					} else {
-						assert.NoError(t, err)
-						assert.NotEmpty(t, apiKeyStr)
-						assert.NotEmpty(t, apiKey.ID)
-						assert.Equal(t, tt.keyCreate.Name, apiKey.Name)
-						assert.Equal(t, tt.targetType, apiKey.TargetType)
-						assert.Equal(t, tt.targetID, apiKey.TargetID)
-						assert.NotEmpty(t, apiKey.KeyHash)
-						assert.Equal(t, apiKeyStr.Obfuscate(key.DefaultObfuscateCharsCount), apiKey.KeyPreview)
+						require.NoError(t, err)
+						require.NotEmpty(t, apiKeyStr)
+						require.NotEmpty(t, apiKey.ID)
+						require.Equal(t, tt.keyCreate.Name, apiKey.Name)
+						require.Equal(t, tt.targetType, apiKey.TargetType)
+						require.Equal(t, tt.targetID, apiKey.TargetID)
+						require.NotEmpty(t, apiKey.KeyHash)
+						require.Equal(t, apiKeyStr.Obfuscate(key.DefaultObfuscateCharsCount), apiKey.KeyPreview)
 
 						if tt.keyCreate.Expiry != nil {
-							assert.NotNil(t, apiKey.Expiry)
-							assert.WithinDuration(t, *tt.keyCreate.Expiry, *apiKey.Expiry, time.Second)
+							require.NotNil(t, apiKey.Expiry)
+							require.WithinDuration(t, *tt.keyCreate.Expiry, *apiKey.Expiry, time.Second)
 						}
 
 						// Validate scopes and restrictions
-						assert.Equal(t, tt.keyCreate.Scopes, apiKey.Scopes)
-						assert.Equal(t, tt.keyCreate.Projects, apiKey.Projects)
-						assert.Equal(t, tt.keyCreate.Branches, apiKey.Branches)
+						require.Equal(t, tt.keyCreate.Scopes, apiKey.Scopes)
+						require.Equal(t, tt.keyCreate.Projects, apiKey.Projects)
+						require.Equal(t, tt.keyCreate.Branches, apiKey.Branches)
 					}
 				})
 			}
@@ -203,15 +203,15 @@ func TestSQLAuthStore(t *testing.T) {
 			for _, tt := range tests {
 				t.Run(tt.name, func(t *testing.T) {
 					keys, err := sqlStore.ListAPIKeys(ctx, tt.targetType, tt.targetID)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					if tt.expectEmpty {
-						assert.Empty(t, keys)
+						require.Empty(t, keys)
 					} else {
-						assert.NotEmpty(t, keys)
+						require.NotEmpty(t, keys)
 						for _, key := range keys {
-							assert.Equal(t, tt.expectedType, key.TargetType)
-							assert.Equal(t, tt.expectedID, key.TargetID)
+							require.Equal(t, tt.expectedType, key.TargetType)
+							require.Equal(t, tt.expectedID, key.TargetID)
 						}
 					}
 				})
@@ -224,7 +224,7 @@ func TestSQLAuthStore(t *testing.T) {
 			_, deleteTestKey, err := sqlStore.CreateAPIKey(ctx, store.KeyTargetOrganization, "org-to-delete", &store.APIKeyCreate{
 				Name: "key-to-delete-test",
 			})
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			tests := []struct {
 				name       string
@@ -259,16 +259,16 @@ func TestSQLAuthStore(t *testing.T) {
 			for _, tt := range tests {
 				t.Run(tt.name, func(t *testing.T) {
 					err := sqlStore.DeleteAPIKeys(ctx, tt.targetType, tt.targetID, tt.keyIDs)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					if tt.verify {
 						keys, err := sqlStore.ListAPIKeys(ctx, tt.targetType, tt.targetID)
-						assert.NoError(t, err)
+						require.NoError(t, err)
 
 						// Verify the key was deleted
 						for _, keyID := range tt.keyIDs {
 							for _, key := range keys {
-								assert.NotEqual(t, keyID, key.ID, "Key should have been deleted but is still present")
+								require.NotEqual(t, keyID, key.ID, "Key should have been deleted but is still present")
 							}
 						}
 					}
@@ -276,6 +276,67 @@ func TestSQLAuthStore(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("org_limits", func(t *testing.T) {
+		const orgID = "test-org"
+
+		t.Run("empty returns no overrides", func(t *testing.T) {
+			limits, err := sqlStore.GetOrgLimits(ctx, orgID)
+			require.NoError(t, err)
+			require.Empty(t, limits)
+		})
+
+		t.Run("set and get", func(t *testing.T) {
+			tests := map[string]struct {
+				key   store.OrgLimitKey
+				value any
+				want  any
+			}{
+				"integer": {key: store.OrgLimitMaxMembers, value: int64(50), want: int64(50)},
+			}
+			for name, tc := range tests {
+				t.Run(name, func(t *testing.T) {
+					require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, tc.key, tc.value))
+					limits, err := sqlStore.GetOrgLimits(ctx, orgID)
+					require.NoError(t, err)
+					got, ok := limits[tc.key]
+					require.True(t, ok)
+					require.Equal(t, tc.want, jsonNumberToInt(got))
+				})
+			}
+		})
+
+		t.Run("overwrite updates value", func(t *testing.T) {
+			require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, store.OrgLimitMaxMembers, int64(10)))
+			require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, store.OrgLimitMaxMembers, int64(99)))
+			limits, err := sqlStore.GetOrgLimits(ctx, orgID)
+			require.NoError(t, err)
+			require.Equal(t, int64(99), jsonNumberToInt(limits[store.OrgLimitMaxMembers]))
+		})
+
+		t.Run("delete removes key", func(t *testing.T) {
+			require.NoError(t, sqlStore.SetOrgLimit(ctx, orgID, store.OrgLimitMaxMembers, int64(5)))
+			require.NoError(t, sqlStore.DeleteOrgLimit(ctx, orgID, store.OrgLimitMaxMembers))
+			limits, err := sqlStore.GetOrgLimits(ctx, orgID)
+			require.NoError(t, err)
+			_, ok := limits[store.OrgLimitMaxMembers]
+			require.False(t, ok)
+		})
+
+		t.Run("invalid key is rejected", func(t *testing.T) {
+			err := sqlStore.SetOrgLimit(ctx, orgID, store.OrgLimitKey("max_branches_per_project"), int64(1))
+			require.Error(t, err)
+		})
+	})
+}
+
+func jsonNumberToInt(v any) any {
+	if n, ok := v.(interface{ Int64() (int64, error) }); ok {
+		if i, err := n.Int64(); err == nil {
+			return i
+		}
+	}
+	return v
 }
 
 func setupSQLStore(ctx context.Context, t *testing.T) *sqlAuthStore {
@@ -299,7 +360,7 @@ func setupSQLStore(ctx context.Context, t *testing.T) *sqlAuthStore {
 
 	// create a new SQL sqlStore
 	config, err := ConfigFromConnectionString(postgresContainer.MustConnectionString(ctx, "sslmode=disable"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	sqlStore, err := NewSQLAuthStore(ctx, config)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
@@ -312,7 +373,7 @@ func setupSQLStore(ctx context.Context, t *testing.T) *sqlAuthStore {
 
 	// run migrations
 	err = sqlStore.Setup(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	return sqlStore
 }
