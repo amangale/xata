@@ -218,6 +218,11 @@ func (r *restKC) RemoveMember(ctx context.Context, realm string, organizationID 
 	if err != nil {
 		return err
 	}
+	// DELETE is idempotent: a 404 from Keycloak means the member is already
+	// absent from the organization, which matches the desired end state.
+	if resp.StatusCode() == http.StatusNotFound {
+		return nil
+	}
 	if !r.isSuccessStatus(resp.StatusCode(), http.StatusOK, http.StatusNoContent) {
 		return fmt.Errorf("failed to remove member: status code: %d", resp.StatusCode())
 	}
