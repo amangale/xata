@@ -29,7 +29,7 @@ const (
 // +kubebuilder:rbac:groups=xata.io,resources=clusterpools,verbs=get;list;watch,namespace=xata-clusters
 // +kubebuilder:rbac:groups=xata.io,resources=xvols,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch,namespace=xata-clusters
-// +kubebuilder:rbac:groups="",resources=persistentvolumes,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=persistentvolumes,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch,namespace=xata-clusters
 
 // WakeupReconciler reconciles a WakeupRequest object
@@ -175,6 +175,13 @@ func (r *WakeupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	err = r.wakeUp(ctx, csiNodePod, xvolName, pv.Name)
 	if err != nil {
 		log.Error(err, "calling WakeUp RPC", "clusterName", cluster.Name)
+		return ctrl.Result{}, ignoreTerminal(err)
+	}
+
+	// Annotate the PV with the name of the XVol used to wake it up
+	err = r.annotatePVWithXVol(ctx, pv, xvolName)
+	if err != nil {
+		log.Error(err, "annotating PV with XVol name", "pvName", pv.Name)
 		return ctrl.Result{}, ignoreTerminal(err)
 	}
 

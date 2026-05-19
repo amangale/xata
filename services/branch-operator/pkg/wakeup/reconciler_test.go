@@ -6,6 +6,7 @@ import (
 
 	poolv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
 	"xata/services/branch-operator/api/v1alpha1"
+	"xata/services/branch-operator/pkg/wakeup"
 
 	"github.com/stretchr/testify/require"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
@@ -81,6 +82,18 @@ func TestWakeupReconciler(t *testing.T) {
 			}
 
 			return metav1.GetControllerOf(c) == nil
+		})
+
+		// Expect the PV to be annotated with the name of the XVol used to wake
+		// it up
+		requireEventuallyTrue(t, func() bool {
+			pv := &corev1.PersistentVolume{}
+			err := k8sClient.Get(ctx, client.ObjectKey{Name: clusterName + "-pv"}, pv)
+			if err != nil {
+				return false
+			}
+
+			return pv.Annotations[wakeup.AwokenByXVolAnnotation] == "xvol-"+branchName
 		})
 	})
 

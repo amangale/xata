@@ -11,6 +11,8 @@ import (
 	"xata/services/branch-operator/api/v1alpha1"
 )
 
+const AwokenByXVolAnnotation = "xata.io/awoken-by-xvol"
+
 // getPersistentVolume returns the PV backing the Cluster's primary instance by
 // resolving the Cluster's healthy PVC and following its bound PV reference.
 func (r *WakeupReconciler) getPersistentVolume(ctx context.Context, cluster *apiv1.Cluster) (*v1.PersistentVolume, error) {
@@ -41,6 +43,21 @@ func (r *WakeupReconciler) getPersistentVolume(ctx context.Context, cluster *api
 	}
 
 	return pv, nil
+}
+
+// annotatePVWithXVol records on the PV the name of the XVol that was used to
+// wake it up.
+func (r *WakeupReconciler) annotatePVWithXVol(ctx context.Context, pv *v1.PersistentVolume, xvolName string) error {
+	patch := client.MergeFrom(pv.DeepCopy())
+	if pv.Annotations == nil {
+		pv.Annotations = map[string]string{}
+	}
+
+	pv.Annotations[AwokenByXVolAnnotation] = xvolName
+	if err := r.Patch(ctx, pv, patch); err != nil {
+		return fmt.Errorf("patch PV %q with XVol annotation: %w", pv.Name, err)
+	}
+	return nil
 }
 
 // pvConditionError constructs a terminal ConditionError for errors encountered
