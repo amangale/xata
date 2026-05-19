@@ -567,6 +567,7 @@ func TestCreatePostgresCluster(t *testing.T) {
 				if tt.wantWUR {
 					require.NoError(t, wurErr)
 					require.Equal(t, branch.Name, wur.Spec.BranchName)
+					require.Equal(t, v1alpha1.XVolCloneName(tt.parentBranch.Name, branch.Name), wur.Spec.XVolName)
 				} else {
 					require.True(t, errors.IsNotFound(wurErr))
 				}
@@ -2111,7 +2112,7 @@ func poolClusterForTest() *apiv1.Cluster {
 	}
 }
 
-func TestCreateWakeupRequest(t *testing.T) {
+func TestCreateWakeupRequestFromUpdate(t *testing.T) {
 	t.Parallel()
 
 	branchName := "lsmevenv7t3l56euo1v9bh3b74"
@@ -2122,6 +2123,7 @@ func TestCreateWakeupRequest(t *testing.T) {
 		b.Annotations = map[string]string{
 			v1alpha1.WakeupPoolAnnotation: "test-pool",
 		}
+		b.Status.PrimaryXVolName = "branch-xvol"
 		return b
 	}
 
@@ -2142,6 +2144,7 @@ func TestCreateWakeupRequest(t *testing.T) {
 			},
 			Spec: v1alpha1.WakeupRequestSpec{
 				BranchName: branchName,
+				XVolName:   "some-xvol",
 			},
 			Status: v1alpha1.WakeupRequestStatus{
 				Conditions: []metav1.Condition{
@@ -2250,12 +2253,102 @@ func TestCreateWakeupRequest(t *testing.T) {
 				require.Equal(t, branchName, wur.Spec.BranchName)
 				if tt.wantNew {
 					require.Empty(t, wur.Labels["initialWUR"])
+					require.Equal(t, "branch-xvol", wur.Spec.XVolName)
 				} else {
 					require.Equal(t, "true", wur.Labels["initialWUR"])
+					require.Equal(t, "some-xvol", wur.Spec.XVolName)
 				}
 			} else {
 				require.True(t, errors.IsNotFound(getErr))
 			}
+		})
+	}
+}
+
+func TestCreateWakeupRequestForNewBranch(t *testing.T) {
+	t.Parallel()
+
+	const (
+		parentName = "parent-branch"
+		childName  = "child-branch"
+		namespace  = "xata-clusters"
+	)
+
+	newChild := func(restore *v1alpha1.RestoreSpec) *v1alpha1.Branch {
+		return &v1alpha1.Branch{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      childName,
+				Namespace: namespace,
+			},
+			Spec: v1alpha1.BranchSpec{
+				Restore: restore,
+			},
+		}
+	}
+
+	newParent := func() *v1alpha1.Branch {
+		return &v1alpha1.Branch{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      parentName,
+				Namespace: namespace,
+			},
+		}
+	}
+
+	tests := map[string]struct {
+		branch  *v1alpha1.Branch
+		parent  *v1alpha1.Branch
+		wantWUR bool
+	}{
+		"no-op when restore type is not XVolClone": {
+			branch: newChild(&v1alpha1.RestoreSpec{
+				Type: v1alpha1.RestoreTypeVolumeSnapshot,
+				Name: parentName,
+			}),
+			parent:  newParent(),
+			wantWUR: false,
+		},
+		"no-op when XVolClone restore but parent is nil": {
+			branch: newChild(&v1alpha1.RestoreSpec{
+				Type: v1alpha1.RestoreTypeXVolClone,
+				Name: parentName,
+			}),
+			parent:  nil,
+			wantWUR: false,
+		},
+		"creates WakeupRequest with derived XVolName when XVolClone restore and parent present": {
+			branch: newChild(&v1alpha1.RestoreSpec{
+				Type: v1alpha1.RestoreTypeXVolClone,
+				Name: parentName,
+			}),
+			parent:  newParent(),
+			wantWUR: true,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+
+			svc, k8sClient := setupTestClustersService(t, withExistingObjects(tt.branch))
+
+			err := svc.createWakeupRequestForNewBranch(ctx, tt.branch, tt.parent)
+			require.NoError(t, err)
+
+			wur := &v1alpha1.WakeupRequest{}
+			getErr := k8sClient.Get(ctx, client.ObjectKey{
+				Name:      childName,
+				Namespace: namespace,
+			}, wur)
+
+			if !tt.wantWUR {
+				require.True(t, errors.IsNotFound(getErr))
+				return
+			}
+
+			require.NoError(t, getErr)
+			require.Equal(t, childName, wur.Spec.BranchName)
+			require.Equal(t, v1alpha1.XVolCloneName(parentName, childName), wur.Spec.XVolName)
 		})
 	}
 }

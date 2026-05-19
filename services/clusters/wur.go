@@ -38,20 +38,25 @@ func (c *ClustersService) createWakeupRequestFromUpdateClusterRequest(
 	}
 
 	// Ensure that a WakeupRequest exists for the branch
-	return c.ensureWakeupRequest(ctx, branch.Name)
+	return c.ensureWakeupRequest(ctx, branch.Name, branch.Status.PrimaryXVolName)
 }
 
 // createWakeupRequestForNewBranch creates a WakeupRequest for a newly created
 // branch if it requires one.
-func (c *ClustersService) createWakeupRequestForNewBranch(ctx context.Context, branch *v1alpha1.Branch) error {
+func (c *ClustersService) createWakeupRequestForNewBranch(ctx context.Context, branch, parent *v1alpha1.Branch) error {
 	// If the branch does not use the xvol clone restore type, no WakeupRequest
 	// is needed
 	if !branch.Spec.Restore.IsXVolCloneType() {
 		return nil
 	}
 
+	// If the branch doesn't have a parent, it can't be using an XVol clone
+	if parent == nil {
+		return nil
+	}
+
 	// Ensure that a WakeupRequest exists for the branch
-	return c.ensureWakeupRequest(ctx, branch.Name)
+	return c.ensureWakeupRequest(ctx, branch.Name, v1alpha1.XVolCloneName(parent.Name, branch.Name))
 }
 
 // ensureWakeupRequest ensures that a WakeupRequest exists for the given
@@ -59,7 +64,7 @@ func (c *ClustersService) createWakeupRequestForNewBranch(ctx context.Context, b
 // status. If the existing WakeupRequest is still in progress, it returns
 // without creating a new one. If the existing WakeupRequest has succeeded or
 // failed, it deletes it and creates a new one.
-func (c *ClustersService) ensureWakeupRequest(ctx context.Context, branchName string) error {
+func (c *ClustersService) ensureWakeupRequest(ctx context.Context, branchName, xvolName string) error {
 	// Check for a WakeupRequest for this branch
 	wur := &v1alpha1.WakeupRequest{}
 	err := c.kubeClient.Get(ctx, types.NamespacedName{
@@ -96,6 +101,7 @@ func (c *ClustersService) ensureWakeupRequest(ctx context.Context, branchName st
 		},
 		Spec: v1alpha1.WakeupRequestSpec{
 			BranchName: branchName,
+			XVolName:   xvolName,
 		},
 	}
 

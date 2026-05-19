@@ -323,7 +323,7 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 	}
 
 	// Create the WakeupRequest CR if the new branch requires one
-	if err := c.createWakeupRequestForNewBranch(ctx, branch); err != nil {
+	if err := c.createWakeupRequestForNewBranch(ctx, branch, parent); err != nil {
 		return nil, k8sErrorToGRPCError(err)
 	}
 
