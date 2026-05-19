@@ -391,8 +391,9 @@ func isReadyConditionFalseWithReason(br v1alpha1.Branch, reason string) bool {
 func setClusterStatus(ctx context.Context, t *testing.T, c *apiv1.Cluster, s apiv1.ClusterStatus) {
 	t.Helper()
 
-	c.Status = s
-	err := k8sClient.Status().Update(ctx, c)
+	err := retryStatusOnConflict(ctx, c, func(c *apiv1.Cluster) {
+		c.Status = s
+	})
 	require.NoError(t, err)
 }
 
