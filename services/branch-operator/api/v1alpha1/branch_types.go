@@ -87,6 +87,12 @@ func (r *RestoreSpec) IsObjectStoreType() bool {
 	return r != nil && r.Type == RestoreTypeObjectStore
 }
 
+// XVolCloneName returns the name of the cloned XVol for the given parent and
+// child branch names.
+func XVolCloneName(parentBranchName, childBranchName string) string {
+	return parentBranchName + "-" + childBranchName
+}
+
 func (r *RestoreSpec) GetServerName() string {
 	if r == nil || r.ServerName == "" {
 		return r.Name

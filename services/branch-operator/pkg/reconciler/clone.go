@@ -25,7 +25,7 @@ func (r *BranchReconciler) reconcileXVolClone(ctx context.Context,
 
 	// Construct the expected name of the cloned XVol based on the parent and
 	// child branch names
-	cloneName := XVolCloneName(branch.Spec.Restore.Name, branch.Name)
+	cloneName := v1alpha1.XVolCloneName(branch.Spec.Restore.Name, branch.Name)
 
 	// Try to get the cloned XVol
 	xvol := &unstructured.Unstructured{}
@@ -132,10 +132,4 @@ func (r *BranchReconciler) ensurePrimaryXVolStatus(
 	}
 
 	return controllerutil.OperationResultUpdated, nil
-}
-
-// XVolCloneName returns the name of the cloned XVol for the given parent and
-// child branch names.
-func XVolCloneName(parentBranchName, childBranchName string) string {
-	return parentBranchName + "-" + childBranchName
 }

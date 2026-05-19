@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"xata/services/branch-operator/api/v1alpha1"
-	"xata/services/branch-operator/pkg/reconciler"
 
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -40,7 +39,7 @@ func TestXVolCloneReconciliation(t *testing.T) {
 				Build()
 
 			withBranch(ctx, t, childBranch, func(t *testing.T, childBr *v1alpha1.Branch) {
-				cloneName := reconciler.XVolCloneName(parentBr.Name, childBr.Name)
+				cloneName := v1alpha1.XVolCloneName(parentBr.Name, childBr.Name)
 
 				// Expect the clone XVol to be created
 				clone := &unstructured.Unstructured{}
@@ -93,7 +92,7 @@ func TestXVolCloneReconciliation(t *testing.T) {
 				Build()
 
 			withBranch(ctx, t, childBranch, func(t *testing.T, childBr *v1alpha1.Branch) {
-				cloneName := reconciler.XVolCloneName(parentBr.Name, childBr.Name)
+				cloneName := v1alpha1.XVolCloneName(parentBr.Name, childBr.Name)
 
 				// Expect the Ready condition to reflect the parent's missing XVol
 				// and no clone XVol to have been created
@@ -127,7 +126,7 @@ func TestXVolCloneReconciliation(t *testing.T) {
 			Build()
 
 		withBranch(ctx, t, childBranch, func(t *testing.T, childBr *v1alpha1.Branch) {
-			cloneName := reconciler.XVolCloneName("does-not-exist", childBr.Name)
+			cloneName := v1alpha1.XVolCloneName("does-not-exist", childBr.Name)
 
 			// Expect the Ready condition to reflect the missing parent and no
 			// clone XVol to have been created
@@ -172,7 +171,7 @@ func TestXVolCloneReconciliation(t *testing.T) {
 				Build()
 
 			withBranch(ctx, t, childBranch, func(t *testing.T, childBr *v1alpha1.Branch) {
-				cloneName := reconciler.XVolCloneName(parentBr.Name, childBr.Name)
+				cloneName := v1alpha1.XVolCloneName(parentBr.Name, childBr.Name)
 
 				// Wait for the clone XVol to be created from the parent
 				clone := &unstructured.Unstructured{}
