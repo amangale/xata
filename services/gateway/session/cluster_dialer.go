@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	clustersv1 "xata/gen/proto/clusters/v1"
 	internalgrpc "xata/internal/grpc"
@@ -21,6 +24,10 @@ import (
 // ErrBranchHibernated is returned when the branch is manually hibernated
 // (scale-to-zero disabled) and cannot be auto-reactivated.
 var ErrBranchHibernated = errors.New("branch is hibernated")
+
+// ErrBranchNotFound is returned when the branch has been terminated and its
+// clusters-<branchID> Service no longer exists.
+var ErrBranchNotFound = errors.New("branch not found")
 
 type clustersServiceClientFn func(ctx context.Context, branchID string) (clustersServiceClient, error)
 
@@ -151,6 +158,9 @@ func (d *ClusterDialer) Dial(ctx context.Context, network string, branch *Branch
 		Id: branch.ID,
 	})
 	if err != nil {
+		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "produced zero addresses") {
+			return nil, ErrBranchNotFound
+		}
 		dialLogger.Error().Err(err).Msg("failed to describe cluster")
 		return nil, dialErr
 	}

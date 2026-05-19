@@ -13,6 +13,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/status"
 )
 
 func TestClusterDialer_Dial(t *testing.T) {
@@ -22,8 +28,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 	errTest := errors.New("oh noes")
 	errDNS := &net.DNSError{Err: "server misbehaving", Name: "branch-rw.svc", IsTemporary: true}
 
-	tests := []struct {
-		name            string
+	tests := map[string]struct {
 		dialer          *mockDialer
 		clustersService clustersServiceClientFn
 		setupMocks      func(*protomocks.ClustersServiceClient)
@@ -31,8 +36,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 		wantDialCalls uint
 		wantErr       error
 	}{
-		{
-			name: "ok - no dial error",
+		"ok - no dial error": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, _ uint, network, address string) (net.Conn, error) {
 					return &net.TCPConn{}, nil
@@ -43,8 +47,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       nil,
 		},
-		{
-			name: "ok - connection refused scale to zero enabled and hibernated cluster, reactivates cluster",
+		"ok - connection refused scale to zero enabled and hibernated cluster, reactivates cluster": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -90,8 +93,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 2,
 			wantErr:       nil,
 		},
-		{
-			name: "ok - DNS not found triggers reactivation for hibernated cluster",
+		"ok - DNS not found triggers reactivation for hibernated cluster": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -137,8 +139,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 2,
 			wantErr:       nil,
 		},
-		{
-			name: "ok - connection refused scale to zero enabled and hibernated cluster, reactivation ongoing",
+		"ok - connection refused scale to zero enabled and hibernated cluster, reactivation ongoing": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -188,8 +189,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 2,
 			wantErr:       nil,
 		},
-		{
-			name: "ok - connection refused scale to zero enabled and hibernated cluster, reactivates cluster with only primary",
+		"ok - connection refused scale to zero enabled and hibernated cluster, reactivates cluster with only primary": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -245,8 +245,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 2,
 			wantErr:       nil,
 		},
-		{
-			name: "ok - connection refused scale to zero enabled and hibernated cluster, reactivates cluster waiting for instances to be ready",
+		"ok - connection refused scale to zero enabled and hibernated cluster, reactivates cluster waiting for instances to be ready": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -301,8 +300,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 2,
 			wantErr:       nil,
 		},
-		{
-			name: "error - unable to connect to clusters service, returns dial error",
+		"error - unable to connect to clusters service, returns dial error": {
 			clustersService: clustersServiceClientFn(func(ctx context.Context, branchID string) (clustersServiceClient, error) {
 				return nil, errors.New("some error")
 			}),
@@ -321,8 +319,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       syscall.ECONNREFUSED,
 		},
-		{
-			name: "error - connection refused with scale to zero disabled, returns error",
+		"error - connection refused with scale to zero disabled, returns error": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -351,8 +348,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       syscall.ECONNREFUSED,
 		},
-		{
-			name: "error - manually hibernated cluster returns ErrBranchHibernated",
+		"error - manually hibernated cluster returns ErrBranchHibernated": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -379,8 +375,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       ErrBranchHibernated,
 		},
-		{
-			name: "error - connection refused with scale to zero enabled and cluster not hibernated, returns error",
+		"error - connection refused with scale to zero enabled and cluster not hibernated, returns error": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -409,8 +404,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       syscall.ECONNREFUSED,
 		},
-		{
-			name: "error - connection refused with hibernated cluster and scale to zero enabled, error on dial after reactivation",
+		"error - connection refused with hibernated cluster and scale to zero enabled, error on dial after reactivation": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -454,8 +448,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 2,
 			wantErr:       syscall.ECONNREFUSED,
 		},
-		{
-			name: "error - connection refused, error describing cluster, returns dial error",
+		"error - connection refused, error describing cluster, returns dial error": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -475,8 +468,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       syscall.ECONNREFUSED,
 		},
-		{
-			name: "error - connection refused, error updating cluster, returns dial error",
+		"error - connection refused, error updating cluster, returns dial error": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -510,8 +502,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       syscall.ECONNREFUSED,
 		},
-		{
-			name: "error - connection refused, error describing cluster after update, returns dial error",
+		"error - connection refused, error describing cluster after update, returns dial error": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -549,8 +540,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       syscall.ECONNREFUSED,
 		},
-		{
-			name: "error - connection refused with hibernated cluster and scale to zero enabled, timeout on reactivation returns dial error",
+		"error - connection refused with hibernated cluster and scale to zero enabled, timeout on reactivation returns dial error": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -584,8 +574,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       syscall.ECONNREFUSED,
 		},
-		{
-			name: "error - other dial error",
+		"error - other dial error": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, _ uint, network, address string) (net.Conn, error) {
 					return nil, errTest
@@ -597,8 +586,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       errTest,
 		},
-		{
-			name: "error - temporary DNS error does not trigger reactivation",
+		"error - temporary DNS error does not trigger reactivation": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, _ uint, network, address string) (net.Conn, error) {
 					return nil, errDNS
@@ -609,10 +597,37 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       errDNS,
 		},
+		"error - transient clusters service unavailable returns dial error": {
+			dialer: &mockDialer{
+				dialFn: func(ctx context.Context, _ uint, network, address string) (net.Conn, error) {
+					return nil, syscall.ECONNREFUSED
+				},
+			},
+			setupMocks: func(mockClusters *protomocks.ClustersServiceClient) {
+				mockClusters.EXPECT().DescribePostgresCluster(ctx, &clustersv1.DescribePostgresClusterRequest{
+					Id: "test-branch",
+				}).Return(nil, status.Error(codes.Unavailable, "connection refused")).Once()
+			},
+
+			wantDialCalls: 1,
+			wantErr:       syscall.ECONNREFUSED,
+		},
+		// Real grpc client so upstream changes to "produced zero addresses" break the match in Dial.
+		"error - real grpc client resolves to zero addresses returns branch-not-found": {
+			dialer: &mockDialer{
+				dialFn: func(_ context.Context, _ uint, _, address string) (net.Conn, error) {
+					return nil, &net.DNSError{Err: "no such host", Name: address, IsNotFound: true}
+				},
+			},
+			setupMocks:      func(mockClusters *protomocks.ClustersServiceClient) {},
+			clustersService: zeroAddressClustersService(),
+			wantDialCalls:   1,
+			wantErr:         ErrBranchNotFound,
+		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			mockClusters := protomocks.NewClustersServiceClient(t)
@@ -662,3 +677,26 @@ type mockClustersServiceClient struct {
 func (m *mockClustersServiceClient) Close() error {
 	return nil
 }
+
+func zeroAddressClustersService() clustersServiceClientFn {
+	mr := manual.NewBuilderWithScheme("test-zero-addr")
+	resolver.Register(mr)
+	mr.InitialState(resolver.State{})
+	return func(ctx context.Context, branchID string) (clustersServiceClient, error) {
+		conn, err := grpc.NewClient(mr.Scheme()+":///"+branchID,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDefaultServiceConfig(`{}`),
+		)
+		if err != nil {
+			return nil, err
+		}
+		return &realClustersClient{ClustersServiceClient: clustersv1.NewClustersServiceClient(conn), conn: conn}, nil
+	}
+}
+
+type realClustersClient struct {
+	clustersv1.ClustersServiceClient
+	conn *grpc.ClientConn
+}
+
+func (c *realClustersClient) Close() error { return c.conn.Close() }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"xata/internal/o11y"
 	"xata/services/gateway/metrics"
 	"xata/services/gateway/serverless/spec"
 	"xata/services/gateway/session"
@@ -98,13 +100,14 @@ func (h *handler) Query(c echo.Context, params spec.QueryParams) error {
 		metrics.AttrErrorType.String(errorType))
 
 	if err != nil {
-		log.Ctx(ctx).Error().
-			Str("error", sanitizeError(err)).
-			Str("error_type", errorType).
-			Str("branch_id", branch.ID).
-			Dur("duration", time.Since(start)).
-			Msg("execute query")
-		return handlePgError(c, err)
+		o11y.SetReqAttribute(c, "branch_id", branch.ID)
+		o11y.SetReqAttribute(c, "error_type", errorType)
+		_ = handlePgError(c, err)
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+
+		return errors.New(sanitizeError(err))
 	}
 
 	return c.JSON(http.StatusOK, response)

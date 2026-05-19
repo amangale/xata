@@ -117,6 +117,8 @@ func handlePgError(c echo.Context, err error) error {
 		return nil
 	case "hibernated":
 		return c.JSON(http.StatusConflict, errorResponse("BRANCH_HIBERNATED", "branch is hibernated, reactivate it to continue"))
+	case "branch_not_found":
+		return c.JSON(http.StatusNotFound, errorResponse("BRANCH_NOT_FOUND", "branch not found"))
 	case "pg_error":
 		var pgErr *pgconn.PgError
 		errors.As(err, &pgErr)
@@ -145,6 +147,9 @@ func classifyError(err error) string {
 	}
 	if errors.Is(err, session.ErrBranchHibernated) {
 		return "hibernated"
+	}
+	if errors.Is(err, session.ErrBranchNotFound) {
+		return "branch_not_found"
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "timeout"

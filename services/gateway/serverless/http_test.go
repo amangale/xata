@@ -677,6 +677,16 @@ func TestHandlePgError(t *testing.T) {
 			wantStatusCode: http.StatusConflict,
 			wantCode:       "BRANCH_HIBERNATED",
 		},
+		"branch not found": {
+			err:            session.ErrBranchNotFound,
+			wantStatusCode: http.StatusNotFound,
+			wantCode:       "BRANCH_NOT_FOUND",
+		},
+		"wrapped branch not found": {
+			err:            fmt.Errorf("connect: %w", session.ErrBranchNotFound),
+			wantStatusCode: http.StatusNotFound,
+			wantCode:       "BRANCH_NOT_FOUND",
+		},
 	}
 
 	for name, tc := range tests {
@@ -776,6 +786,14 @@ func TestClassifyError(t *testing.T) {
 		"wrapped branch hibernated": {
 			err:  fmt.Errorf("connect: %w", session.ErrBranchHibernated),
 			want: "hibernated",
+		},
+		"branch not found": {
+			err:  session.ErrBranchNotFound,
+			want: "branch_not_found",
+		},
+		"wrapped branch not found": {
+			err:  fmt.Errorf("connect: %w", session.ErrBranchNotFound),
+			want: "branch_not_found",
 		},
 		"other error": {
 			err:  errors.New("something unexpected"),
@@ -941,7 +959,11 @@ func TestQuery_IPFilter(t *testing.T) {
 			c := e.NewContext(req, rec)
 
 			err := h.Query(c, spec.QueryParams{ConnectionString: new(connStr)})
-			require.NoError(t, err)
+			if tc.wantStatus >= http.StatusInternalServerError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 			require.Equal(t, tc.wantStatus, rec.Code)
 
 			if tc.wantStatus == http.StatusForbidden {
