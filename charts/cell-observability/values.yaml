@@ -124,6 +124,7 @@ vmagent:
         scheme: https
         tls_config: {insecure_skip_verify: true}
         bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        max_scrape_size: 64MB
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_label_cnpg_io_podRole]
             regex: instance
