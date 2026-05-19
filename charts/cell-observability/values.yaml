@@ -81,6 +81,14 @@ vmagent:
           - source_labels: [__meta_kubernetes_pod_label_cnpg_io_podRole]
             regex: instance
             action: keep
+          # role:pod SD emits one target per (container, port). The postgres
+          # container declares postgresql/metrics/status ports plus there are
+          # init containers; without this filter all of them collapse onto
+          # the same ${pod_ip}:9187 after the __address__ rewrite below and
+          # vmagent logs a duplicate-target error per scrape interval.
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            regex: metrics
+            action: keep
           - source_labels: [__meta_kubernetes_pod_ip]
             target_label: __address__
             replacement: $1:9187
@@ -119,6 +127,11 @@ vmagent:
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_label_cnpg_io_podRole]
             regex: instance
+            action: keep
+          # See cnpg job above: pick one port per pod so the __address__
+          # rewrite below doesn't produce identical targets for each port.
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            regex: metrics
             action: keep
           - target_label: __address__
             replacement: kubernetes.default.svc:443
