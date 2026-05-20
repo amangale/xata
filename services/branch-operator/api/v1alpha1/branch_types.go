@@ -320,7 +320,8 @@ const (
 	HibernationModeEnabled  HibernationMode = "Enabled"
 	HibernationModeDisabled HibernationMode = "Disabled"
 
-	WakeupPoolAnnotation = "xata.io/wakeup-pool"
+	WakeupPoolAnnotation   = "xata.io/wakeup-pool"
+	AwokenByXVolAnnotation = "xata.io/awoken-by-xvol"
 )
 
 // IsEnabled returns true if hibernation mode is enabled

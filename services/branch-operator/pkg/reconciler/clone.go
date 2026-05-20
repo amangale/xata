@@ -40,9 +40,8 @@ func (r *BranchReconciler) reconcileXVolClone(ctx context.Context,
 		return r.createClonedXVol(ctx, branch, cloneName)
 	}
 
-	// Ensure that the child Branch's status reflects the existing cloned XVol's
-	// name
-	return r.ensurePrimaryXVolStatus(ctx, branch, cloneName)
+	// If the cloned XVol exists there is nothing to do
+	return controllerutil.OperationResultNone, nil
 }
 
 // createClonedXVol creates the cloned XVol for the given child Branch,
@@ -106,30 +105,5 @@ func (r *BranchReconciler) createClonedXVol(
 		return controllerutil.OperationResultNone, err
 	}
 
-	// Set the child Branch's status to reference the cloned XVol
-	branch.Status.PrimaryXVolName = cloneName
-	if err := r.Status().Update(ctx, branch); err != nil {
-		return controllerutil.OperationResultCreated, err
-	}
-
 	return controllerutil.OperationResultCreated, nil
-}
-
-// ensurePrimaryXVolStatus ensures that the child Branch's status reflects the
-// existing cloned XVol's name
-func (r *BranchReconciler) ensurePrimaryXVolStatus(
-	ctx context.Context,
-	branch *v1alpha1.Branch,
-	cloneName string,
-) (controllerutil.OperationResult, error) {
-	if branch.Status.PrimaryXVolName == cloneName {
-		return controllerutil.OperationResultNone, nil
-	}
-
-	branch.Status.PrimaryXVolName = cloneName
-	if err := r.Status().Update(ctx, branch); err != nil {
-		return controllerutil.OperationResultNone, err
-	}
-
-	return controllerutil.OperationResultUpdated, nil
 }

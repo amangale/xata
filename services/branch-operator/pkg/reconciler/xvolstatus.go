@@ -15,22 +15,8 @@ import (
 )
 
 // updateXVolStatus resolves the XVol associated with the Branch and reports
-// its availability via the XVolInfoAvailable condition. PrimaryXVolName is
-// immutable once set: on the first successful resolution it is recorded and
-// subsequent reconciles verify that the recorded XVol still exists rather than
-// re-deriving the name.
-//
-// For parent branches, the initial resolution walks Cluster → PVC → PV → XVol
-// (XVols are named after the PV they back). Child branches (XVolClone
-// restore) have PrimaryXVolName set by reconcileXVolClone before any cluster
-// exists, so they always take the fast path here.
+// its availability via the XVolInfoAvailable condition
 func (r *BranchReconciler) updateXVolStatus(ctx context.Context, branch *v1alpha1.Branch) error {
-	// PrimaryXVolName is immutable once set, so just verify the recorded XVol
-	// still exists.
-	if branch.Status.PrimaryXVolName != "" {
-		return r.recordXVolStatus(ctx, branch, branch.Status.PrimaryXVolName)
-	}
-
 	// The XVol info is unavailable if the Branch has no associated Cluster
 	if !branch.HasClusterName() {
 		return r.setXVolInfoConditionToFalse(ctx, branch, v1alpha1.BranchHasNoClusterReason)
@@ -52,7 +38,7 @@ func (r *BranchReconciler) updateXVolStatus(ctx context.Context, branch *v1alpha
 		return r.setXVolInfoConditionToFalse(ctx, branch, v1alpha1.ClusterPVCNotAvailableReason)
 	}
 
-	// Get the PVC for the Cluster
+	// Get the PVC for the Cluster's current primary instance
 	pvc := &v1.PersistentVolumeClaim{}
 	err = r.Get(ctx, client.ObjectKey{
 		Name:      pvcName,
@@ -68,23 +54,40 @@ func (r *BranchReconciler) updateXVolStatus(ctx context.Context, branch *v1alpha
 		return r.setXVolInfoConditionToFalse(ctx, branch, v1alpha1.PVNotBoundReason)
 	}
 
-	// Record the XVol name and verify its existence
-	return r.recordXVolStatus(ctx, branch, pvName)
+	// Get the PV for the PVC
+	pv := &v1.PersistentVolume{}
+	err = r.Get(ctx, client.ObjectKey{Name: pvName}, pv)
+	if err != nil {
+		return fmt.Errorf("get pv %q: %w", pvName, err)
+	}
+
+	// Record the XVol name on the Branch's status subresource
+	return r.recordXVolStatus(ctx, branch, pv)
 }
 
-// recordXVolStatus looks up an XVol by name and sets the XVolInfoAvailable
-// condition based on the result. On success the name is recorded in
-// PrimaryXVolName.
-func (r *BranchReconciler) recordXVolStatus(ctx context.Context, branch *v1alpha1.Branch, name string) error {
+// recordXVolStatus looks up the XVol corresponding to a PV and sets the
+// XVolInfoAvailable condition based on the result. On success the name is
+// recorded in PrimaryXVolName.
+func (r *BranchReconciler) recordXVolStatus(ctx context.Context, branch *v1alpha1.Branch, pv *v1.PersistentVolume) error {
 	xvol := &unstructured.Unstructured{}
 	xvol.SetGroupVersionKind(xvolGVK)
 
-	// Try to get the named XVol. If it doesn't exist or the API is not found,
-	// set the condition to False with an appropriate reason
-	err := r.Get(ctx, client.ObjectKey{Name: name}, xvol)
+	// Determine the name of the XVol corresponding to the PV. This defaults to
+	// the PV name but can be overridden by an annotation on the PV
+	xVolName := pv.Name
+	if n, ok := pv.Annotations[v1alpha1.AwokenByXVolAnnotation]; ok {
+		xVolName = n
+	}
+
+	// Try to get XVol. If the API is not found (ie the CRD is not installed) set
+	// the condition to False with an appropriate reason
+	err := r.Get(ctx, client.ObjectKey{Name: xVolName}, xvol)
 	if meta.IsNoMatchError(err) {
 		return r.setXVolInfoConditionToFalse(ctx, branch, v1alpha1.XVolCRDNotInstalledReason)
 	}
+
+	// If there is no XVol corresponding to the PV set the condition to False
+	// with an appropriate reason.
 	if apierrors.IsNotFound(err) {
 		return r.setXVolInfoConditionToFalse(ctx, branch, v1alpha1.XVolNotFoundReason)
 	}
@@ -93,6 +96,6 @@ func (r *BranchReconciler) recordXVolStatus(ctx context.Context, branch *v1alpha
 	}
 
 	// The XVol exists, record the name and set the condition to True
-	branch.Status.PrimaryXVolName = name
+	branch.Status.PrimaryXVolName = xVolName
 	return r.setXVolInfoConditionToTrue(ctx, branch, v1alpha1.XVolInfoCollectedReason)
 }

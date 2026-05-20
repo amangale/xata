@@ -6,7 +6,6 @@ import (
 
 	poolv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
 	"xata/services/branch-operator/api/v1alpha1"
-	"xata/services/branch-operator/pkg/wakeup"
 
 	"github.com/stretchr/testify/require"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
@@ -93,7 +92,7 @@ func TestWakeupReconciler(t *testing.T) {
 				return false
 			}
 
-			return pv.Annotations[wakeup.AwokenByXVolAnnotation] == "xvol-"+branchName
+			return pv.Annotations[v1alpha1.AwokenByXVolAnnotation] == "xvol-"+branchName
 		})
 	})
 

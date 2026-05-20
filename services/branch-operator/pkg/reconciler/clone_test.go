@@ -65,15 +65,6 @@ func TestXVolCloneReconciliation(t *testing.T) {
 				require.Len(t, ownerRefs, 1)
 				require.Equal(t, childBr.Name, ownerRefs[0].Name)
 				require.Equal(t, "Branch", ownerRefs[0].Kind)
-
-				// The child Branch's PrimaryXVolName is set to the clone XVol
-				requireEventuallyTrue(t, func() bool {
-					err := getK8SObject(ctx, childBr.Name, childBr)
-					if err != nil {
-						return false
-					}
-					return childBr.Status.PrimaryXVolName == cloneName
-				})
 			})
 		})
 	})
