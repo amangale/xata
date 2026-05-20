@@ -40,11 +40,21 @@ func TestXVolReconciliation(t *testing.T) {
 				return getK8SObject(ctx, clusterName, &cluster)
 			})
 
-			xvolName, pvcName, xvol := createPVCAndXVol(ctx, t, clusterName)
+			// Model a Cluster with 2 replicas.
+			// Replicas 1 uses a PV that is annotated with the XVol name, modelling the xatastor-slot case.
+			// Replicas 2 uses a PV that where PV name == XVol name, modelling the non-slot case.
+			primaryPVCName := clusterName + "-1"
+			primaryXVolName := clusterName + "-primary-xvol"
+			primaryPVName := clusterName + "-primary-pv"
+			primaryXVol := createBoundPVCAndXVol(ctx, t, primaryPVCName, primaryXVolName, primaryPVName)
 
-			// Set the Cluster's status.HealthyPVC to reference the PVC
+			replicaPVCName := clusterName + "-2"
+			replicaXVolName := clusterName + "-replica-xvol"
+			replicaXVol := createBoundPVCAndXVol(ctx, t, replicaPVCName, replicaXVolName, "")
+
+			// Set the Cluster's status.HealthyPVC to reference both PVCs
 			setClusterStatus(ctx, t, &cluster, apiv1.ClusterStatus{
-				HealthyPVC: []string{pvcName},
+				HealthyPVC: []string{primaryPVCName, replicaPVCName},
 			})
 
 			// Unset the cluster name on the Branch
@@ -53,19 +63,27 @@ func TestXVolReconciliation(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			// Expect the XVol reclaim policy to be set to Retain
-			requireEventuallyTrue(t, func() bool {
-				err := k8sClient.Get(ctx, client.ObjectKey{Name: xvolName}, xvol)
-				if err != nil {
-					return false
-				}
-				dp, _, _ := unstructured.NestedString(xvol.Object, "spec", "xvolReclaimPolicy")
-				return dp == "Retain"
-			})
+			// Expect both XVols to be patched to Retain and to have the Branch
+			// as an owner
+			for _, tc := range []struct {
+				name string
+				xvol *unstructured.Unstructured
+			}{
+				{primaryXVolName, primaryXVol},
+				{replicaXVolName, replicaXVol},
+			} {
+				requireEventuallyTrue(t, func() bool {
+					err := k8sClient.Get(ctx, client.ObjectKey{Name: tc.name}, tc.xvol)
+					if err != nil {
+						return false
+					}
+					dp, _, _ := unstructured.NestedString(tc.xvol.Object, "spec", "xvolReclaimPolicy")
+					return dp == "Retain"
+				})
 
-			// Expect the Branch to be an owner of the XVol
-			require.Len(t, xvol.GetOwnerReferences(), 1)
-			require.Equal(t, br.Name, xvol.GetOwnerReferences()[0].Name)
+				require.Len(t, tc.xvol.GetOwnerReferences(), 1)
+				require.Equal(t, br.Name, tc.xvol.GetOwnerReferences()[0].Name)
+			}
 		})
 	})
 

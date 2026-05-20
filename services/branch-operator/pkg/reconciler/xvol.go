@@ -23,10 +23,7 @@ var xvolGVK = schema.GroupVersionKind{
 
 // reconcileXVolOwnership ensures that XVols backing the Branch's owned Cluster
 // have their reclaim policy set to Retain and their owner reference set to the
-// Branch when the Branch does not specify a Cluster name. Child Branches
-// created using an an XVolClone restore type will already have their XVol's
-// reclaim policy and owner reference set on creation, so this reconciliation
-// step takes action only for parent Branches.
+// Branch when the Branch does not specify a Cluster name.
 //
 // This step ensures that the XVols will be retained after a subsequent
 // reconciliation step (reconcileOwnedClusters) deletes the Cluster.
@@ -38,13 +35,6 @@ func (r *BranchReconciler) reconcileXVolOwnership(
 	// will not be deleted later during reconciliation, so there is no need to
 	// protect the XVols.
 	if branch.HasClusterName() {
-		return controllerutil.OperationResultNone, nil
-	}
-
-	// If the Branch uses an XVolClone-based restore, there is nothing to do -
-	// the cloned XVol will already have its reclaim policy set to Retain and
-	// owner reference set to the Branch
-	if branch.Spec.Restore.IsXVolCloneType() {
 		return controllerutil.OperationResultNone, nil
 	}
 
@@ -102,12 +92,17 @@ func (r *BranchReconciler) ensureXVolRetained(ctx context.Context, branch *v1alp
 		return false, nil
 	}
 
-	// Get the XVol named after the PV. We have to use Unstructured here because
-	// the XVol types are in the private xatastor repository so we can't import
-	// them directly.
+	// Get the name of the XVol corresponding to the PV
+	xVolName, err := r.xVolNameForPV(ctx, pvName)
+	if err != nil {
+		return false, fmt.Errorf("get xvol name for pv %q: %w", pvName, err)
+	}
+
+	// Get the XVol. We have to use Unstructured here because the XVol types are
+	// in the private xatastor repository so we can't import them directly.
 	xvol := &unstructured.Unstructured{}
 	xvol.SetGroupVersionKind(xvolGVK)
-	err := r.Get(ctx, client.ObjectKey{Name: pvName}, xvol)
+	err = r.Get(ctx, client.ObjectKey{Name: xVolName}, xvol)
 	if err != nil {
 		// If the XVol CRD is not installed, treat it the same as if the XVol did
 		// not exist - there is nothing to protect.

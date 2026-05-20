@@ -54,30 +54,22 @@ func (r *BranchReconciler) updateXVolStatus(ctx context.Context, branch *v1alpha
 		return r.setXVolInfoConditionToFalse(ctx, branch, v1alpha1.PVNotBoundReason)
 	}
 
-	// Get the PV for the PVC
-	pv := &v1.PersistentVolume{}
-	err = r.Get(ctx, client.ObjectKey{Name: pvName}, pv)
+	// Look up the XVol name for the PV
+	xVolName, err := r.xVolNameForPV(ctx, pvName)
 	if err != nil {
-		return fmt.Errorf("get pv %q: %w", pvName, err)
+		return fmt.Errorf("get xvol name for pv %q: %w", pvName, err)
 	}
 
 	// Record the XVol name on the Branch's status subresource
-	return r.recordXVolStatus(ctx, branch, pv)
+	return r.recordXVolStatus(ctx, branch, xVolName)
 }
 
 // recordXVolStatus looks up the XVol corresponding to a PV and sets the
 // XVolInfoAvailable condition based on the result. On success the name is
 // recorded in PrimaryXVolName.
-func (r *BranchReconciler) recordXVolStatus(ctx context.Context, branch *v1alpha1.Branch, pv *v1.PersistentVolume) error {
+func (r *BranchReconciler) recordXVolStatus(ctx context.Context, branch *v1alpha1.Branch, xVolName string) error {
 	xvol := &unstructured.Unstructured{}
 	xvol.SetGroupVersionKind(xvolGVK)
-
-	// Determine the name of the XVol corresponding to the PV. This defaults to
-	// the PV name but can be overridden by an annotation on the PV
-	xVolName := pv.Name
-	if n, ok := pv.Annotations[v1alpha1.AwokenByXVolAnnotation]; ok {
-		xVolName = n
-	}
 
 	// Try to get XVol. If the API is not found (ie the CRD is not installed) set
 	// the condition to False with an appropriate reason
@@ -98,4 +90,21 @@ func (r *BranchReconciler) recordXVolStatus(ctx context.Context, branch *v1alpha
 	// The XVol exists, record the name and set the condition to True
 	branch.Status.PrimaryXVolName = xVolName
 	return r.setXVolInfoConditionToTrue(ctx, branch, v1alpha1.XVolInfoCollectedReason)
+}
+
+// xVolNameForPV determines the name of the XVol corresponding to the given PV
+func (r *BranchReconciler) xVolNameForPV(ctx context.Context, pvName string) (string, error) {
+	pv := &v1.PersistentVolume{}
+	err := r.Get(ctx, client.ObjectKey{Name: pvName}, pv)
+	if err != nil {
+		return "", err
+	}
+
+	// Determine the name of the XVol corresponding to the PV. This defaults to
+	// the PV name but can be overridden by an annotation on the PV
+	xVolName := pvName
+	if n, ok := pv.Annotations[v1alpha1.AwokenByXVolAnnotation]; ok {
+		xVolName = n
+	}
+	return xVolName, nil
 }
