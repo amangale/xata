@@ -21,7 +21,7 @@ spec:
           image: postgres:17
           volumeMounts:
             - mountPath: /data
-              name: cache-volume
+              name: data
           env:
             - name: PGDATA
               value: /data/pgdata
@@ -42,7 +42,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - pg_isready
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
             initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 5
@@ -53,12 +53,17 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - pg_isready
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
             successThreshold: 1
             failureThreshold: 3
-      volumes:
-        - name: cache-volume
-          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
