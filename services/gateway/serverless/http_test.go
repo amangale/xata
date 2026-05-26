@@ -213,6 +213,17 @@ func TestValidateRequest(t *testing.T) {
 			}())},
 			wantErr: "too many queries",
 		},
+		"params at limit": {
+			req: &spec.SQLRequest{Query: new("SELECT 1"), Params: new(make([]any, maxQueryParams))},
+		},
+		"too many params single": {
+			req:     &spec.SQLRequest{Query: new("SELECT 1"), Params: new(make([]any, maxQueryParams+1))},
+			wantErr: "too many parameters",
+		},
+		"too many params batch": {
+			req:     &spec.SQLRequest{Queries: new([]spec.QueryItem{{Query: "SELECT 1", Params: new(make([]any, maxQueryParams+1))}})},
+			wantErr: "query at index 0 has too many parameters",
+		},
 	}
 
 	for name, tc := range tests {

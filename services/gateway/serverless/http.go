@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -33,6 +34,7 @@ const (
 	maxQueriesPerBatch   = 100
 	queryTimeout         = 30 * time.Second
 	maxResponseSizeBytes = 10 * 1024 * 1024 // 10MB response limit
+	maxQueryParams       = math.MaxUint16
 )
 
 func (h *handler) Query(c echo.Context, params spec.QueryParams) error {
@@ -107,7 +109,12 @@ func (h *handler) Query(c echo.Context, params spec.QueryParams) error {
 			return nil
 		}
 
-		return errors.New(sanitizeError(err))
+		sanitized := sanitizeError(err)
+		if c.Response().Status >= http.StatusInternalServerError {
+			log.Ctx(c.Request().Context()).Error().Msg(sanitized)
+		}
+
+		return errors.New(sanitized)
 	}
 
 	return c.JSON(http.StatusOK, response)
@@ -308,11 +315,17 @@ func validateRequest(r *spec.SQLRequest) error {
 			if q.Query == "" {
 				return fmt.Errorf("query at index %d is empty", i)
 			}
+			if q.Params != nil && len(*q.Params) > maxQueryParams {
+				return fmt.Errorf("query at index %d has too many parameters: maximum %d allowed", i, maxQueryParams)
+			}
 		}
 		return nil
 	}
 	if r.Query == nil || *r.Query == "" {
 		return ErrMissingQuery
+	}
+	if r.Params != nil && len(*r.Params) > maxQueryParams {
+		return fmt.Errorf("too many parameters: maximum %d allowed", maxQueryParams)
 	}
 	return nil
 }
