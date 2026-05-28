@@ -98,7 +98,6 @@ func (h *handler) Query(c echo.Context, params spec.QueryParams) error {
 
 	errorType := classifyError(err)
 	h.metrics.RecordRequest(ctx, metrics.ProtocolHTTP, err == nil, time.Since(start),
-		metrics.AttrBranchID.String(branch.ID),
 		metrics.AttrErrorType.String(errorType))
 
 	if err != nil {

@@ -94,15 +94,15 @@ func initMetrics(
 		},
 	}
 
-	go m.ticker()
+	go m.ticker(period)
 
 	return m
 }
 
-func (m *metrics) ticker() {
+func (m *metrics) ticker(period time.Duration) {
 	defer func() { m.chDone <- struct{}{} }()
 
-	err := timed.Periodic(m.controllersStop, 10*time.Second, func() error {
+	err := timed.Periodic(m.controllersStop, period, func() error {
 		m.collect(m.controllersStop)
 		return nil
 	})

@@ -106,8 +106,7 @@ func (h *handler) Websocket(c echo.Context) error {
 
 	h.metrics.ConnectionStart(ctx, metrics.ProtocolWebSocket)
 	defer func() {
-		h.metrics.ConnectionEnd(ctx, metrics.ProtocolWebSocket, time.Since(startTime),
-			metrics.AttrBranchID.String(branch.ID))
+		h.metrics.ConnectionEnd(ctx, metrics.ProtocolWebSocket, time.Since(startTime))
 	}()
 
 	startup, pipelinedData, err := parseStartupPipeline(startupData)

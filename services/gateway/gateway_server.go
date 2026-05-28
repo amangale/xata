@@ -125,7 +125,7 @@ func (s *server) serve(ctx context.Context, l net.Listener) error {
 			s.metrics.ConnectionStart(ctx, metrics.ProtocolWire)
 			var branchID string
 			defer func() {
-				s.metrics.ConnectionEnd(ctx, metrics.ProtocolWire, time.Since(startTime), metrics.AttrBranchID.String(branchID))
+				s.metrics.ConnectionEnd(ctx, metrics.ProtocolWire, time.Since(startTime))
 			}()
 
 			sessionID := uuid.New().String()
