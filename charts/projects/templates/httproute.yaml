@@ -27,4 +27,6 @@ spec:
             type: RegularExpression
             value: {{ . | quote }}
         {{- end }}
+      timeouts:
+        request: 60s
 {{- end }}

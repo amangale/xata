@@ -27,3 +27,5 @@ spec:
         - path:
             type: PathPrefix
             value: /robots.txt
+      timeouts:
+        request: 60s

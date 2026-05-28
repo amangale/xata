@@ -42,3 +42,5 @@ spec:
         - path:
             type: RegularExpression
             value: "^/organizations(/*)$|^/organizations/([^/]+)(/api-keys|/members.*|/invitations.*|/deletion-request|/membership-limits)?$"
+      timeouts:
+        request: 60s
