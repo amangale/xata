@@ -37,41 +37,104 @@ func TestBuildLogsQL_ResumeCursorClause(t *testing.T) {
 	require.Contains(t, q, "_time:<1730000000000000000")
 }
 
-func TestBuildLogsQL_FilterTranslation(t *testing.T) {
+func TestCompileLogFilter(t *testing.T) {
 	tests := map[string]struct {
-		filters  []LogFilter
-		contains []string
+		filter LogFilter
+		want   string
 	}{
 		"instance in": {
-			filters:  []LogFilter{{Field: "instance", Op: "in", Values: []string{"br-1-0", "br-1-1"}}},
-			contains: []string{`kubernetes.pod_name:in ("br-1-0","br-1-1")`},
+			filter: LogFilter{Field: "instance", Op: "in", Values: []string{"br-1-0", "br-1-1"}},
+			want:   `kubernetes.pod_name:in ("br-1-0","br-1-1")`,
 		},
-		"level expansion": {
-			filters:  []LogFilter{{Field: "level", Op: "in", Values: []string{"error"}}},
-			contains: []string{`severity_text:in ("ERROR","FATAL","PANIC","CRITICAL")`},
+		"level error expands to postgres severities": {
+			filter: LogFilter{Field: "level", Op: "in", Values: []string{"error"}},
+			want:   `severity_text:in ("ERROR","FATAL","PANIC","CRITICAL")`,
+		},
+		"level info expands": {
+			filter: LogFilter{Field: "level", Op: "in", Values: []string{"info"}},
+			want:   `severity_text:in ("INFO","LOG","NOTICE")`,
 		},
 		"process in": {
-			filters:  []LogFilter{{Field: "process", Op: "in", Values: []string{"client backend"}}},
-			contains: []string{`backend_type:in ("client backend")`},
+			filter: LogFilter{Field: "process", Op: "in", Values: []string{"client backend"}},
+			want:   `backend_type:in ("client backend")`,
 		},
-		"body contains": {
-			filters:  []LogFilter{{Field: "body", Op: "contains", Value: "slow"}},
-			contains: []string{`body:"slow"`},
+		"body contains is a literal substring regex on _msg": {
+			filter: LogFilter{Field: "body", Op: "contains", Value: "slow"},
+			want:   `_msg:~"slow"`,
 		},
-		"body iregex prepends inline flag": {
-			filters:  []LogFilter{{Field: "body", Op: "iregex", Value: "^conn"}},
-			contains: []string{`body:~"(?i)^conn"`},
+		"body icontains prepends the inline case-insensitive flag": {
+			filter: LogFilter{Field: "body", Op: "icontains", Value: "checkpoint"},
+			want:   `_msg:~"(?i)checkpoint"`,
+		},
+		"body contains escapes regex metacharacters": {
+			filter: LogFilter{Field: "body", Op: "contains", Value: "a.b*c"},
+			want:   `_msg:~"a\\.b\\*c"`,
+		},
+		"body icontains escapes regex metacharacters": {
+			filter: LogFilter{Field: "body", Op: "icontains", Value: "1.5s"},
+			want:   `_msg:~"(?i)1\\.5s"`,
+		},
+		"body regex passes the pattern through verbatim": {
+			filter: LogFilter{Field: "body", Op: "regex", Value: "^conn.* established$"},
+			want:   `_msg:~"^conn.* established$"`,
+		},
+		"body iregex passes the pattern through with inline flag": {
+			filter: LogFilter{Field: "body", Op: "iregex", Value: "^conn"},
+			want:   `_msg:~"(?i)^conn"`,
+		},
+		"value with embedded quotes is escaped for the LogsQL literal": {
+			filter: LogFilter{Field: "body", Op: "contains", Value: `say "hi"`},
+			want:   `_msg:~"say \"hi\""`,
 		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, err := buildLogsQL("xata-clusters", "br-1", tt.filters, 0)
+			got, err := compileLogFilter(tt.filter)
 			require.NoError(t, err)
-			for _, frag := range tt.contains {
-				require.Contains(t, got, frag, got)
-			}
+			require.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestCompileLogFilter_Rejected(t *testing.T) {
+	tests := map[string]LogFilter{
+		"instance only supports in":        {Field: "instance", Op: "contains", Value: "x"},
+		"level only supports in":           {Field: "level", Op: "regex", Value: "x"},
+		"process only supports in":         {Field: "process", Op: "icontains", Value: "x"},
+		"body rejects in":                  {Field: "body", Op: "in", Values: []string{"x"}},
+		"body rejects unknown op":          {Field: "body", Op: "eq", Value: "x"},
+		"unknown field":                    {Field: "trace_id", Op: "contains", Value: "x"},
+		"level rejects unknown level name": {Field: "level", Op: "in", Values: []string{"bogus"}},
+	}
+	for name, f := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := compileLogFilter(f)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestBuildLogsQL_FullQueryLocksScopeAndFields(t *testing.T) {
+	filters := []LogFilter{
+		{Field: "instance", Op: "in", Values: []string{"br-1-0"}},
+		{Field: "level", Op: "in", Values: []string{"error"}},
+		{Field: "process", Op: "in", Values: []string{"checkpointer"}},
+		{Field: "body", Op: "icontains", Value: "checkpoint"},
+	}
+	got, err := buildLogsQL("xata-clusters", "br-1", filters, 1730000000000000000)
+	require.NoError(t, err)
+
+	want := `kubernetes.namespace_name:="xata-clusters" AND kubernetes.container_name:="postgres"` +
+		` AND logger:="postgres"` +
+		` AND (branch_id:="br-1" OR kubernetes.pod_name:~"^br-1-")` +
+		` AND _time:<1730000000000000000` +
+		` AND kubernetes.pod_name:in ("br-1-0")` +
+		` AND severity_text:in ("ERROR","FATAL","PANIC","CRITICAL")` +
+		` AND backend_type:in ("checkpointer")` +
+		` AND _msg:~"(?i)checkpoint"`
+	require.Equal(t, want, got)
+
+	require.NotContains(t, got, "body:", "the message lives in _msg; body: matches nothing in VictoriaLogs")
 }
 
 func TestLogsQuerier_DecodesEntriesAndSetsCursor(t *testing.T) {
@@ -113,6 +176,21 @@ func TestUnwrapCNPGBody(t *testing.T) {
 	require.Equal(t, "lifecycle", unwrapCNPGBody(`{"msg":"lifecycle"}`))
 	require.Equal(t, "plain text", unwrapCNPGBody("plain text"))
 	require.Equal(t, `{"foo":"bar"}`, unwrapCNPGBody(`{"foo":"bar"}`)) // unrecognised JSON shape passes through
+}
+
+func TestDecodeRow(t *testing.T) {
+	row := decodeRow(map[string]any{
+		"_time":               "2025-05-01T12:00:00Z",
+		"_msg":                "checkpoint complete",
+		"kubernetes.pod_name": "br-1-0",
+		"severity_text":       "LOG",
+		"backend_type":        "checkpointer",
+	})
+	require.False(t, row.Timestamp.IsZero())
+	require.Equal(t, "checkpoint complete", row.Message)
+	require.Equal(t, "br-1-0", row.Pod)
+	require.Equal(t, "LOG", row.Severity)
+	require.Equal(t, "checkpointer", row.Process)
 }
 
 func TestExpandLevels(t *testing.T) {

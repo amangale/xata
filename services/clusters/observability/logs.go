@@ -196,15 +196,16 @@ func compileLogFilter(f LogFilter) (string, error) {
 		}
 		return inClause("backend_type", f.Values), nil
 	case "body":
+		// The message lives in _msg, not body (Vector renames it on ingest).
 		switch f.Op {
 		case "contains":
-			return fmt.Sprintf("body:%s", quoteLQL(f.Value)), nil
+			return fmt.Sprintf("_msg:~%s", quoteLQL(regexp.QuoteMeta(f.Value))), nil
 		case "icontains":
-			return fmt.Sprintf("body:i(%s)", quoteLQL(f.Value)), nil
+			return fmt.Sprintf("_msg:~%s", quoteLQL("(?i)"+regexp.QuoteMeta(f.Value))), nil
 		case "regex":
-			return fmt.Sprintf("body:~%s", quoteLQL(f.Value)), nil
+			return fmt.Sprintf("_msg:~%s", quoteLQL(f.Value)), nil
 		case "iregex":
-			return fmt.Sprintf("body:~%s", quoteLQL("(?i)"+f.Value)), nil
+			return fmt.Sprintf("_msg:~%s", quoteLQL("(?i)"+f.Value)), nil
 		default:
 			return "", fmt.Errorf("op [%s] not allowed for field [body]", f.Op)
 		}
