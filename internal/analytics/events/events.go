@@ -91,6 +91,18 @@ func NewBranchDeletedEvent(organizationID, projectID, branchID string) Event {
 	}
 }
 
+func NewBranchDescribedEvent(organizationID, projectID, branchID string) Event {
+	return Event{
+		Name:  "branch described",
+		OrgID: organizationID,
+		Properties: map[string]any{
+			"organization": organizationID,
+			"project":      projectID,
+			"branch":       branchID,
+		},
+	}
+}
+
 func NewProjectUpdatedEvent(organizationID, projectID string, changedFields []string, newValues map[string]any) Event {
 	return Event{
 		Name:  "project updated",

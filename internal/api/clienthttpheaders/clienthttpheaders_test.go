@@ -30,8 +30,8 @@ func TestNewParsedHeaders(t *testing.T) {
 		},
 		"with cli command": {
 			userAgent: "Mozilla/5.0",
-			xataAgent: "client=@xata.io/api; version=0.1.0; service=cli; cli_command_id=branch:list",
-			want:      &ParsedHeaders{UserAgent: "Mozilla/5.0", XataAgent: ParsedXataAgent{Client: "@xata.io/api", Version: "0.1.0", Service: "cli", CLICommandID: "branch:list"}},
+			xataAgent: "client=@xata.io/api; version=0.1.0; service=cli; cli_command_id=branch:list; cli_invocation_id=inv-123",
+			want:      &ParsedHeaders{UserAgent: "Mozilla/5.0", XataAgent: ParsedXataAgent{Client: "@xata.io/api", Version: "0.1.0", Service: "cli", CLICommandID: "branch:list", CLIInvocationID: "inv-123"}},
 		},
 		"console with session": {
 			xataAgent: "client=@xata.io/api; version=0.1.0; service=console; session=abc123",

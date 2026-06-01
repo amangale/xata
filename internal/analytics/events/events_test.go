@@ -381,6 +381,40 @@ func TestNewBranchDeletedEvent(t *testing.T) {
 	}
 }
 
+func TestNewBranchDescribedEvent(t *testing.T) {
+	tests := map[string]struct {
+		organizationID string
+		projectID      string
+		branchID       string
+		want           Event
+	}{
+		"basic": {
+			organizationID: "org-123",
+			projectID:      "proj-456",
+			branchID:       "branch-789",
+			want: Event{
+				Name:  "branch described",
+				OrgID: "org-123",
+				Properties: map[string]any{
+					"organization": "org-123",
+					"project":      "proj-456",
+					"branch":       "branch-789",
+				},
+			},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := NewBranchDescribedEvent(tt.organizationID, tt.projectID, tt.branchID)
+
+			assert.Equal(t, tt.want.Name, got.Name)
+			assert.Equal(t, tt.want.OrgID, got.OrgID)
+			assert.Equal(t, tt.want.Properties, got.Properties)
+		})
+	}
+}
+
 func TestNewProjectUpdatedEvent(t *testing.T) {
 	tests := map[string]struct {
 		organizationID string

@@ -3,7 +3,7 @@
 // don't want to embed analytics directly. They send semicolon-separated key=value pairs:
 //
 //	client=@xata.io/api; version=0.1.0; service=console; session=phsid_abc  // console.xata.io
-//	client=@xata.io/api; version=0.1.0; service=cli; cli_command_id=branch:list; ci=github-actions; pr=true; ai_agent=cursor  // CLI
+//	client=@xata.io/api; version=0.1.0; service=cli; cli_command_id=branch:list; cli_invocation_id=abc123; ci=github-actions; pr=true; ai_agent=cursor  // CLI
 //	client=@xata.io/api; version=0.1.0                                          // end user using SDK directly
 //
 // The parsed values are stored in request context for use in tracing and analytics (PostHog).
@@ -17,14 +17,15 @@ import (
 type ctxKey struct{}
 
 type ParsedXataAgent struct {
-	Client       string
-	Version      string
-	Service      string
-	CLICommandID string
-	Session      string
-	CI           string
-	PR           string
-	AIAgent      string
+	Client          string
+	Version         string
+	Service         string
+	CLICommandID    string
+	CLIInvocationID string
+	Session         string
+	CI              string
+	PR              string
+	AIAgent         string
 }
 
 type ParsedHeaders struct {
@@ -48,6 +49,8 @@ func parseXataAgent(xataAgentHeader string) ParsedXataAgent {
 			result.Service = v
 		case "cli_command_id":
 			result.CLICommandID = v
+		case "cli_invocation_id":
+			result.CLIInvocationID = v
 		case "session":
 			result.Session = v
 		case "ci":

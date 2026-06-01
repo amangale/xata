@@ -17,6 +17,7 @@ import (
 	"xata/gen/protomocks"
 	"xata/internal/analytics/events"
 	"xata/internal/api"
+	"xata/internal/api/clienthttpheaders"
 	"xata/internal/apitest"
 	"xata/internal/apitest/validation"
 	"xata/internal/flags"
@@ -2562,7 +2563,9 @@ func TestDescribeBranch(t *testing.T) {
 
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), mockPostgresConfig, nil)
+	mockAnalytics := analyticsmocks.NewClient(t)
+	mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchDescribedEvent(apitest.TestOrganization, "project_id", "branchID")).Return().Maybe()
+	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), nil, sched, mockAnalytics, mockPostgresConfig, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	branch := store.Branch{
@@ -2989,7 +2992,9 @@ func TestDescribeBranchXataUser(t *testing.T) {
 
 	feat := openfeaturetest.NewClient(map[openfeature.FeatureFlag]bool{flags.XataUser: true})
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), mockPostgresConfig, nil)
+	mockAnalytics := analyticsmocks.NewClient(t)
+	mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchDescribedEvent(apitest.TestOrganization, "project_id", "branchID")).Return().Once()
+	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), nil, sched, mockAnalytics, mockPostgresConfig, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	branch := store.Branch{
@@ -3040,6 +3045,8 @@ func TestDescribeBranchXataUser(t *testing.T) {
 	mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, region.ID).Return(instanceTypes, nil).Once()
 
 	c, rec := e.GET("/organizations/" + apitest.TestOrganization + "/projects/projectID/branches/" + branch.ID).Context()
+	ctx := clienthttpheaders.NewContext(c.Request().Context(), clienthttpheaders.NewParsedHeaders("", "service=cli; cli_command_id=branch:describe; cli_invocation_id=inv-123"))
+	c.SetRequest(c.Request().WithContext(ctx))
 	err := apiHandler.DescribeBranch(c, apitest.TestOrganization, "project_id", branch.ID)
 	require.NoError(t, err)
 	rec.MustCode(http.StatusOK)

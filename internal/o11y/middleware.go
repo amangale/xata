@@ -71,8 +71,8 @@ const (
 	headerXAgent     = "X-Xata-Agent"
 
 	// X-Xata-Agent can carry many key=value pairs (client, version, service, cli_command_id,
-	// session, ci, pr, ai_agent, …) so we set a max length to accommodate this.
-	customHeadersMaxLength = 256
+	// cli_invocation_id, session, ci, pr, ai_agent, …) so we set a max length to accommodate this.
+	customHeadersMaxLength = 512
 )
 
 func (datadogStyle) TraceID(id trace.TraceID) (string, string) {
@@ -410,6 +410,9 @@ func newSpanMiddleware(
 				}
 				if headers.XataAgent.CLICommandID != "" {
 					span.SetAttributes(attribute.String(keyLogAgent+".cli_command_id", headers.XataAgent.CLICommandID))
+				}
+				if headers.XataAgent.CLIInvocationID != "" {
+					span.SetAttributes(attribute.String(keyLogAgent+".cli_invocation_id", headers.XataAgent.CLIInvocationID))
 				}
 				if headers.XataAgent.Session != "" {
 					span.SetAttributes(attribute.String(keyLogAgent+".session", headers.XataAgent.Session))

@@ -16,6 +16,7 @@ import (
 	"xata/internal/analytics"
 	"xata/internal/analytics/events"
 	"xata/internal/api"
+	"xata/internal/api/clienthttpheaders"
 	"xata/internal/extensions"
 	"xata/internal/flags"
 	"xata/internal/o11y"
@@ -1190,6 +1191,10 @@ func (s *handler) DescribeBranch(c echo.Context, organizationID spec.Organizatio
 			return fmt.Errorf("converting resources to instance type: %w", err)
 		}
 
+		headers := clienthttpheaders.FromContext(c.Request().Context())
+		if headers != nil && headers.XataAgent.Service == "cli" {
+			s.analytics.Track(c.Request().Context(), events.NewBranchDescribedEvent(string(organizationID), projectID, branchID))
+		}
 		return c.JSON(http.StatusOK, storeToAPIBranchMetadata(branch, connString, instanceType, cluster))
 	})
 }
