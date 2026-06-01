@@ -145,8 +145,10 @@ func (q *LogsQuerier) Query(ctx context.Context, branchID string, start, end tim
 // LogsQL field-filter syntax (`field:value`, `field:in (a,b)`,
 // `field:~"regex"`) which is the stable subset supported by VictoriaLogs.
 //
-// resumeBeforeNanos > 0 adds `_time:<{ns}` so paginated queries pick up
-// strictly older rows than the previous page's oldest timestamp.
+// resumeBeforeNanos > 0 adds `_time:<{ts}` (RFC3339Nano) so paginated
+// queries pick up strictly older rows than the previous page's oldest
+// timestamp. VictoriaLogs's `_time:` filter parses bare integers as
+// durations, so the cursor must be serialized as an ISO timestamp.
 func buildLogsQL(namespace, branchID string, filters []LogFilter, resumeBeforeNanos int64) (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "kubernetes.namespace_name:=%q AND kubernetes.container_name:=%q", namespace, "postgres")
@@ -160,7 +162,7 @@ func buildLogsQL(namespace, branchID string, filters []LogFilter, resumeBeforeNa
 	// rollout; rows from before then carry no branch_id field.
 	fmt.Fprintf(&b, ` AND (branch_id:=%q OR kubernetes.pod_name:~%q)`, branchID, "^"+regexp.QuoteMeta(branchID)+"-")
 	if resumeBeforeNanos > 0 {
-		fmt.Fprintf(&b, " AND _time:<%d", resumeBeforeNanos)
+		fmt.Fprintf(&b, " AND _time:<%s", time.Unix(0, resumeBeforeNanos).UTC().Format(time.RFC3339Nano))
 	}
 
 	for _, f := range filters {

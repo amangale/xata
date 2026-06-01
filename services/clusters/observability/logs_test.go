@@ -34,7 +34,7 @@ func TestBuildLogsQL_AppendsBranchScope(t *testing.T) {
 func TestBuildLogsQL_ResumeCursorClause(t *testing.T) {
 	q, err := buildLogsQL("xata-clusters", "br-1", nil, 1730000000000000000)
 	require.NoError(t, err)
-	require.Contains(t, q, "_time:<1730000000000000000")
+	require.Contains(t, q, "_time:<2024-10-27T03:33:20Z")
 }
 
 func TestCompileLogFilter(t *testing.T) {
@@ -127,7 +127,7 @@ func TestBuildLogsQL_FullQueryLocksScopeAndFields(t *testing.T) {
 	want := `kubernetes.namespace_name:="xata-clusters" AND kubernetes.container_name:="postgres"` +
 		` AND logger:="postgres"` +
 		` AND (branch_id:="br-1" OR kubernetes.pod_name:~"^br-1-")` +
-		` AND _time:<1730000000000000000` +
+		` AND _time:<2024-10-27T03:33:20Z` +
 		` AND kubernetes.pod_name:in ("br-1-0")` +
 		` AND severity_text:in ("ERROR","FATAL","PANIC","CRITICAL")` +
 		` AND backend_type:in ("checkpointer")` +
