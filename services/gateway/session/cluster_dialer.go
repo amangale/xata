@@ -145,8 +145,10 @@ func (d *ClusterDialer) Dial(ctx context.Context, network string, branch *Branch
 		return conn, dialErr
 	}
 
-	// if the connection failed (refused or DNS not found), check if the
-	// cluster is in hibernation mode and reactivate it if scale to zero is enabled
+	// Dial failed with refused or DNS-not-found. Look up the cluster to
+	// decide between: reactivating (hibernated + scale-to-zero), holding the
+	// connection until the target is reachable (cluster is or will be
+	// healthy), or surfacing the error (genuinely unavailable).
 	svc, err := d.clustersServiceClient(ctx, branch.ID)
 	if err != nil {
 		dialLogger.Error().Err(err).Msg("failed to create clusters service client")
@@ -181,14 +183,14 @@ func (d *ClusterDialer) Dial(ctx context.Context, network string, branch *Branch
 	case d.isClusterHibernated(cluster.Status):
 		return nil, ErrBranchHibernated
 
-	case d.isScaleToZeroEnabled(cluster.Configuration) && d.isClusterStartingOrHealthy(cluster.Status):
-		// The cluster is not hibernated but the dial still failed. With
-		// scale-to-zero enabled this means it is mid-wake: a concurrent request
-		// already cleared the hibernation flag, or the Postgres instances are
-		// back but the dial target (the pooler Service) isn't routable yet. Hold
-		// the connection and wait for it to become reachable instead of
-		// returning the dial error.
-		dialLogger.Info().Msg("cluster is reactivating, waiting for it to become available...")
+	case d.isClusterStartingOrHealthy(cluster.Status):
+		// The cluster is not hibernated but the dial still failed. The cluster
+		// is supposed to be reachable (Healthy or Transient), so the target is
+		// briefly unavailable: a scale-to-zero wake in flight, a postgres pod
+		// roll, a pooler Service endpoint flap. Hold the connection and wait
+		// for the target to become reachable instead of returning the dial
+		// error.
+		dialLogger.Info().Msg("cluster is unreachable but reported available, waiting...")
 		conn, err := d.waitUntilReachable(ctx, svc, branch.ID, network, branch.Address)
 		if err != nil {
 			dialLogger.Error().Err(err).Msg("failed to wait for cluster to be available")
@@ -300,9 +302,9 @@ func (d *ClusterDialer) isClusterAvailable(status *clustersv1.ClusterStatus) boo
 		status.InstanceCount == status.InstanceReadyCount
 }
 
-// shouldAttemptReactivation returns true for dial errors that indicate the
-// cluster may be hibernated: connection refused (pod exists but not listening)
-// or DNS not found (K8s service deleted during scale-to-zero).
+// shouldAttemptReactivation returns true for dial errors that warrant a
+// cluster status lookup: connection refused (pod or Service not listening)
+// or DNS not found (Service deleted during scale-to-zero).
 func shouldAttemptReactivation(err error) bool {
 	if err == nil {
 		return false

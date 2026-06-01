@@ -48,7 +48,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       nil,
 		},
-		"ok - connection refused scale to zero enabled and hibernated cluster, reactivates cluster": {
+		"ok - hibernated cluster with scale to zero reactivates on dial": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
@@ -320,14 +320,14 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       syscall.ECONNREFUSED,
 		},
-		"error - connection refused with scale to zero disabled, returns error": {
+		"ok - connection refused with scale to zero disabled, cluster healthy, waits then connects": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
 					case 1:
 						return nil, syscall.ECONNREFUSED
 					default:
-						return nil, errors.New("unexpected dial call")
+						return &net.TCPConn{}, nil
 					}
 				},
 			},
@@ -343,11 +343,11 @@ func TestClusterDialer_Dial(t *testing.T) {
 					Configuration: &clustersv1.ClusterConfiguration{
 						ScaleToZero: &clustersv1.ScaleToZero{Enabled: false},
 					},
-				}, nil).Once()
+				}, nil)
 			},
 
-			wantDialCalls: 1,
-			wantErr:       syscall.ECONNREFUSED,
+			wantDialCalls: 2,
+			wantErr:       nil,
 		},
 		"error - manually hibernated cluster returns ErrBranchHibernated": {
 			dialer: &mockDialer{
