@@ -33,7 +33,7 @@ require (
 	github.com/jxskiss/base62 v1.1.0
 	github.com/kubernetes-csi/external-snapshotter/client/v6 v6.3.0
 	github.com/labstack/echo/v4 v4.13.4
-	github.com/lib/pq v1.11.2
+	github.com/lib/pq v1.12.3
 	github.com/mattn/go-isatty v0.0.20
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/open-feature/go-sdk v1.16.0
