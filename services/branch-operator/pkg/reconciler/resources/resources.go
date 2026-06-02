@@ -137,33 +137,45 @@ func PoolerServiceSpec(poolerName string) v1.ServiceSpec {
 	}
 }
 
+// BackupCredentials references the Secret holding static S3 credentials. It is
+// used when backing up to a non-AWS, S3-compatible endpoint (Cloudflare R2 in
+// production, or MinIO for local development), where there is no IAM role to
+// inherit. The Secret is managed outside this operator (e.g. SOPS in infra-new).
+type BackupCredentials struct {
+	SecretName         string
+	AccessKeyIDKey     string
+	SecretAccessKeyKey string
+}
+
 // ObjectStoreSpec defines the ObjectStoreSpec for a branch's backup storage.
-// It configures S3/MinIO storage for CNPG backup retention.
+// It configures S3 storage for CNPG backup retention.
 //
-// It supports both production (AWS S3 with IAM role) and local dev (MinIO with
-// credentials) modes based on whether backupsEndpoint is set.
+// It supports both AWS S3 (IAM-role auth) and S3-compatible endpoints with
+// static credentials (Cloudflare R2 in production, MinIO for local dev), based
+// on whether backupsEndpoint is set.
 func ObjectStoreSpec(
 	backupsBucket,
 	backupsEndpoint,
 	barmanRegionSecretName,
 	barmanRegionSecretKey,
 	retention string,
+	credentials BackupCredentials,
 ) barmanPluginApi.ObjectStoreSpec {
+	awsCredentials := &apiv1.S3Credentials{
+		InheritFromIAMRole: true,
+		RegionReference: &apiv1.SecretKeySelector{
+			LocalObjectReference: apiv1.LocalObjectReference{
+				Name: barmanRegionSecretName,
+			},
+			Key: barmanRegionSecretKey,
+		},
+	}
+
 	spec := barmanPluginApi.ObjectStoreSpec{
 		RetentionPolicy: retention,
 		Configuration: apiv1.BarmanObjectStoreConfiguration{
-			DestinationPath: backupsBucket,
-			BarmanCredentials: apiv1.BarmanCredentials{
-				AWS: &apiv1.S3Credentials{
-					InheritFromIAMRole: true,
-					RegionReference: &apiv1.SecretKeySelector{
-						LocalObjectReference: apiv1.LocalObjectReference{
-							Name: barmanRegionSecretName,
-						},
-						Key: barmanRegionSecretKey,
-					},
-				},
-			},
+			DestinationPath:   backupsBucket,
+			BarmanCredentials: apiv1.BarmanCredentials{AWS: awsCredentials},
 			Wal: &apiv1.WalBackupConfiguration{
 				Compression: barmanApi.CompressionTypeGzip,
 			},
@@ -187,23 +199,24 @@ func ObjectStoreSpec(
 		},
 	}
 
-	// Configure MinIO for local development if endpoint is provided
+	// A custom endpoint means a non-AWS, S3-compatible store (e.g. Cloudflare R2
+	// or MinIO for local dev). There's no IAM role to inherit, so
+	// switch to static credentials from the configured Secret. The region
+	// reference is kept: R2 expects a region ("auto") and MinIO ignores it.
 	if backupsEndpoint != "" {
 		spec.Configuration.EndpointURL = backupsEndpoint
-		spec.Configuration.AWS = &apiv1.S3Credentials{
-			AccessKeyIDReference: &apiv1.SecretKeySelector{
-				LocalObjectReference: apiv1.LocalObjectReference{
-					Name: "minio-eu",
-				},
-				Key: "rootUser",
+		awsCredentials.InheritFromIAMRole = false
+		awsCredentials.AccessKeyIDReference = &apiv1.SecretKeySelector{
+			LocalObjectReference: apiv1.LocalObjectReference{
+				Name: credentials.SecretName,
 			},
-			SecretAccessKeyReference: &apiv1.SecretKeySelector{
-				LocalObjectReference: apiv1.LocalObjectReference{
-					Name: "minio-eu",
-				},
-				Key: "rootPassword",
+			Key: credentials.AccessKeyIDKey,
+		}
+		awsCredentials.SecretAccessKeyReference = &apiv1.SecretKeySelector{
+			LocalObjectReference: apiv1.LocalObjectReference{
+				Name: credentials.SecretName,
 			},
-			InheritFromIAMRole: false,
+			Key: credentials.SecretAccessKeyKey,
 		}
 	}
 

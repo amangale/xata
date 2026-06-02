@@ -234,6 +234,7 @@ func TestObjectStoreSpec(t *testing.T) {
 		regionSecretName string
 		regionSecretKey  string
 		retention        string
+		credentials      resources.BackupCredentials
 		want             barmanPluginApi.ObjectStoreSpec
 	}{
 		{
@@ -327,10 +328,17 @@ func TestObjectStoreSpec(t *testing.T) {
 			},
 		},
 		{
-			name:            "local mode with MinIO - bucket C",
-			backupsBucket:   "s3://dev-bucket/backups",
-			backupsEndpoint: "http://minio.local:9000",
-			retention:       "7d",
+			name:             "local mode with MinIO - bucket C",
+			backupsBucket:    "s3://dev-bucket/backups",
+			backupsEndpoint:  "http://minio.local:9000",
+			regionSecretName: "barman-dummy-secret",
+			regionSecretKey:  "dummy",
+			retention:        "7d",
+			credentials: resources.BackupCredentials{
+				SecretName:         "minio-eu",
+				AccessKeyIDKey:     "rootUser",
+				SecretAccessKeyKey: "rootPassword",
+			},
 			want: barmanPluginApi.ObjectStoreSpec{
 				RetentionPolicy: "7d",
 				Configuration: apiv1.BarmanObjectStoreConfiguration{
@@ -338,6 +346,12 @@ func TestObjectStoreSpec(t *testing.T) {
 					EndpointURL:     "http://minio.local:9000",
 					BarmanCredentials: apiv1.BarmanCredentials{
 						AWS: &apiv1.S3Credentials{
+							RegionReference: &apiv1.SecretKeySelector{
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "barman-dummy-secret",
+								},
+								Key: "dummy",
+							},
 							AccessKeyIDReference: &apiv1.SecretKeySelector{
 								LocalObjectReference: apiv1.LocalObjectReference{
 									Name: "minio-eu",
@@ -377,10 +391,17 @@ func TestObjectStoreSpec(t *testing.T) {
 			},
 		},
 		{
-			name:            "local mode with MinIO - bucket D",
-			backupsBucket:   "s3://test-bucket/test/path",
-			backupsEndpoint: "http://minio-test.cluster.local:9000",
-			retention:       "14d",
+			name:             "local mode with MinIO - bucket D",
+			backupsBucket:    "s3://test-bucket/test/path",
+			backupsEndpoint:  "http://minio-test.cluster.local:9000",
+			regionSecretName: "barman-dummy-secret",
+			regionSecretKey:  "dummy",
+			retention:        "14d",
+			credentials: resources.BackupCredentials{
+				SecretName:         "minio-eu",
+				AccessKeyIDKey:     "rootUser",
+				SecretAccessKeyKey: "rootPassword",
+			},
 			want: barmanPluginApi.ObjectStoreSpec{
 				RetentionPolicy: "14d",
 				Configuration: apiv1.BarmanObjectStoreConfiguration{
@@ -388,6 +409,12 @@ func TestObjectStoreSpec(t *testing.T) {
 					EndpointURL:     "http://minio-test.cluster.local:9000",
 					BarmanCredentials: apiv1.BarmanCredentials{
 						AWS: &apiv1.S3Credentials{
+							RegionReference: &apiv1.SecretKeySelector{
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "barman-dummy-secret",
+								},
+								Key: "dummy",
+							},
 							AccessKeyIDReference: &apiv1.SecretKeySelector{
 								LocalObjectReference: apiv1.LocalObjectReference{
 									Name: "minio-eu",
@@ -426,6 +453,71 @@ func TestObjectStoreSpec(t *testing.T) {
 				},
 			},
 		},
+		{
+			// Custom (non-MinIO) credentials secret: guards against the
+			// credentials being re-hardcoded. Sample values only.
+			name:             "S3-compatible endpoint with custom credentials secret",
+			backupsBucket:    "s3://example-backups",
+			backupsEndpoint:  "https://s3.example.com",
+			regionSecretName: "barman-region",
+			regionSecretKey:  "region",
+			retention:        "30d",
+			credentials: resources.BackupCredentials{
+				SecretName:         "backup-s3-credentials",
+				AccessKeyIDKey:     "ACCESS_KEY_ID",
+				SecretAccessKeyKey: "SECRET_ACCESS_KEY",
+			},
+			want: barmanPluginApi.ObjectStoreSpec{
+				RetentionPolicy: "30d",
+				Configuration: apiv1.BarmanObjectStoreConfiguration{
+					DestinationPath: "s3://example-backups",
+					EndpointURL:     "https://s3.example.com",
+					BarmanCredentials: apiv1.BarmanCredentials{
+						AWS: &apiv1.S3Credentials{
+							RegionReference: &apiv1.SecretKeySelector{
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "barman-region",
+								},
+								Key: "region",
+							},
+							AccessKeyIDReference: &apiv1.SecretKeySelector{
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "backup-s3-credentials",
+								},
+								Key: "ACCESS_KEY_ID",
+							},
+							SecretAccessKeyReference: &apiv1.SecretKeySelector{
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "backup-s3-credentials",
+								},
+								Key: "SECRET_ACCESS_KEY",
+							},
+							InheritFromIAMRole: false,
+						},
+					},
+					Wal: &apiv1.WalBackupConfiguration{
+						Compression: barmanApi.CompressionTypeGzip,
+					},
+					Data: &apiv1.DataBackupConfiguration{
+						Compression:           barmanApi.CompressionTypeGzip,
+						AdditionalCommandArgs: []string{"--min-chunk-size=5MB", "--read-timeout=60", "-vv"},
+					},
+				},
+				InstanceSidecarConfiguration: barmanPluginApi.InstanceSidecarConfiguration{
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							v1.ResourceCPU:    resource.MustParse("100m"),
+							v1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+						Limits: v1.ResourceList{
+							v1.ResourceCPU:    resource.MustParse("250m"),
+							v1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+					},
+					RetentionPolicyIntervalSeconds: 86400,
+				},
+			},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -436,6 +528,7 @@ func TestObjectStoreSpec(t *testing.T) {
 				tc.regionSecretName,
 				tc.regionSecretKey,
 				tc.retention,
+				tc.credentials,
 			)
 
 			require.Equal(t, tc.want, got)

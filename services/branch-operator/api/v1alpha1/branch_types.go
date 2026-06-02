@@ -421,8 +421,9 @@ type PgBackRestSpec struct {
 	Region string `json:"region"`
 
 	// Endpoint overrides S3 endpoint discovery. Required for non-AWS
-	// S3-compatible storage (e.g. MinIO for local dev).
-	// When set, MinIO credentials are used automatically.
+	// S3-compatible storage (e.g. Cloudflare R2, or MinIO for local
+	// dev). When set, static credentials from the operator-configured
+	// credentials Secret are used instead of an IAM role.
 	// +optional
 	Endpoint string `json:"endpoint,omitempty"`
 

@@ -24,8 +24,9 @@ type PgBackRestSpecApplyConfiguration struct {
 	// Region is the S3 region.
 	Region *string `json:"region,omitempty"`
 	// Endpoint overrides S3 endpoint discovery. Required for non-AWS
-	// S3-compatible storage (e.g. MinIO for local dev).
-	// When set, MinIO credentials are used automatically.
+	// S3-compatible storage (e.g. Cloudflare R2, or MinIO for local
+	// dev). When set, static credentials from the operator-configured
+	// credentials Secret are used instead of an IAM role.
 	Endpoint *string `json:"endpoint,omitempty"`
 	// InheritFromIAMRole uses the pod's IAM role for S3 authentication.
 	InheritFromIAMRole *bool `json:"inheritFromIAMRole,omitempty"`

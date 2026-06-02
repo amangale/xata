@@ -153,16 +153,19 @@ func (s *BranchOperatorService) Init(ctx context.Context) error {
 
 	// Create and setup the branch reconciler
 	reconciler := &reconciler.BranchReconciler{
-		Client:                 mgr.GetClient(),
-		Scheme:                 mgr.GetScheme(),
-		ClustersNamespace:      s.config.ClustersNamespace,
-		BackupsBucket:          s.config.BackupsBucket,
-		BackupsEndpoint:        s.config.BackupsEndpoint,
-		BarmanRegionSecretName: s.config.BarmanRegionSecretName,
-		BarmanRegionSecretKey:  s.config.BarmanRegionSecretKey,
-		Tolerations:            s.config.Tolerations,
-		EnforceZone:            s.config.EnforceZone,
-		ImagePullSecrets:       s.config.ImagePullSecrets,
+		Client:                               mgr.GetClient(),
+		Scheme:                               mgr.GetScheme(),
+		ClustersNamespace:                    s.config.ClustersNamespace,
+		BackupsBucket:                        s.config.BackupsBucket,
+		BackupsEndpoint:                      s.config.BackupsEndpoint,
+		BackupsCredentialsSecretName:         s.config.BackupsCredentialsSecretName,
+		BackupsCredentialsAccessKeyIDKey:     s.config.BackupsCredentialsAccessKeyIDKey,
+		BackupsCredentialsSecretAccessKeyKey: s.config.BackupsCredentialsSecretAccessKeyKey,
+		BarmanRegionSecretName:               s.config.BarmanRegionSecretName,
+		BarmanRegionSecretKey:                s.config.BarmanRegionSecretKey,
+		Tolerations:                          s.config.Tolerations,
+		EnforceZone:                          s.config.EnforceZone,
+		ImagePullSecrets:                     s.config.ImagePullSecrets,
 	}
 	if err := reconciler.SetupWithManager(ctx, mgr); err != nil {
 		return err

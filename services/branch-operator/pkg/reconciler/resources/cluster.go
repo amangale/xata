@@ -127,6 +127,10 @@ type ClusterConfig struct {
 	Tolerations       []corev1.Toleration
 	EnforceZone       bool
 	ImagePullSecrets  []string
+	// BackupCredentials references the Secret holding static S3 credentials,
+	// used for pgbackrest when targeting a non-AWS S3-compatible endpoint
+	// (Cloudflare R2, or MinIO for local dev). Mirrors the barman ObjectStore.
+	BackupCredentials BackupCredentials
 }
 
 // ClusterSpec generates the CNPG Cluster spec apply configuration from the
@@ -313,7 +317,7 @@ func ExternalClusters(cfg ClusterConfig) []*apiv1ac.ExternalClusterApplyConfigur
 			apiv1ac.ExternalCluster().
 				WithName(cfg.RestoreSpec.Name).
 				WithPgBackRest(apiv1ac.PgBackRestExternalCluster().
-					WithRepository(apiv1ac.PgBackRestRepository().WithS3(pgbackrestS3(pgb))).
+					WithRepository(apiv1ac.PgBackRestRepository().WithS3(pgbackrestS3(pgb, cfg.BackupCredentials))).
 					WithOptions(options)),
 		}
 	}
@@ -434,15 +438,17 @@ func backupConfiguration(cfg ClusterConfig) *apiv1ac.BackupConfigurationApplyCon
 
 	return backup.
 		WithPgBackRest(apiv1ac.PgBackRestConfiguration().
-			WithRepository(apiv1ac.PgBackRestRepository().WithS3(pgbackrestS3(pgb))).
+			WithRepository(apiv1ac.PgBackRestRepository().WithS3(pgbackrestS3(pgb, cfg.BackupCredentials))).
 			WithOptions(options)).
 		WithTarget(apiv1.BackupTargetStandby)
 }
 
 // pgbackrestS3 builds the S3 apply configuration from a PgBackRestSpec.
-// When Endpoint is set (local dev with MinIO), it hardcodes MinIO credentials
-// matching the barman pattern.
-func pgbackrestS3(pgb *v1alpha1.PgBackRestSpec) *apiv1ac.PgBackRestS3ApplyConfiguration {
+// When Endpoint is set, the store is a non-AWS S3-compatible endpoint
+// (Cloudflare R2, or MinIO for local dev) with no IAM role to inherit, so it
+// switches to static credentials from the configured Secret. Mirrors the
+// barman ObjectStoreSpec.
+func pgbackrestS3(pgb *v1alpha1.PgBackRestSpec, creds BackupCredentials) *apiv1ac.PgBackRestS3ApplyConfiguration {
 	s3 := apiv1ac.PgBackRestS3().
 		WithBucket(pgb.Bucket).
 		WithRegion(pgb.Region).
@@ -452,12 +458,12 @@ func pgbackrestS3(pgb *v1alpha1.PgBackRestSpec) *apiv1ac.PgBackRestS3ApplyConfig
 		s3 = s3.WithEndpoint(pgb.Endpoint).
 			WithInheritFromIAMRole(false).
 			WithAccessKeyID(machineryapi.SecretKeySelector{
-				LocalObjectReference: machineryapi.LocalObjectReference{Name: "minio-eu"},
-				Key:                  "rootUser",
+				LocalObjectReference: machineryapi.LocalObjectReference{Name: creds.SecretName},
+				Key:                  creds.AccessKeyIDKey,
 			}).
 			WithSecretAccessKey(machineryapi.SecretKeySelector{
-				LocalObjectReference: machineryapi.LocalObjectReference{Name: "minio-eu"},
-				Key:                  "rootPassword",
+				LocalObjectReference: machineryapi.LocalObjectReference{Name: creds.SecretName},
+				Key:                  creds.SecretAccessKeyKey,
 			})
 	}
 

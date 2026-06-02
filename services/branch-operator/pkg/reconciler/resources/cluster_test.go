@@ -489,6 +489,66 @@ func TestClusterSpec(t *testing.T) {
 					WithTarget(apiv1.BackupTargetStandby)),
 		},
 		{
+			name: "pgbackrest backup with S3-compatible endpoint and custom credentials",
+			cfgModifier: func(cfg *resources.ClusterConfig) {
+				cfg.BackupSpec = &v1alpha1.BackupSpec{
+					Method: v1alpha1.BackupMethodPgBackRest,
+					PgBackRest: &v1alpha1.PgBackRestSpec{
+						Bucket:              "s3://example-backups",
+						Region:              "auto",
+						Endpoint:            "https://s3.example.com",
+						InheritFromIAMRole:  true,
+						RetentionFullDays:   7,
+						CompressType:        "lz4",
+						ArchiveAsync:        true,
+						ArchivePushQueueMax: "2GiB",
+						ArchiveGetQueueMax:  "2GiB",
+					},
+				}
+				cfg.BackupCredentials = resources.BackupCredentials{
+					SecretName:         "backup-s3-credentials",
+					AccessKeyIDKey:     "ACCESS_KEY_ID",
+					SecretAccessKeyKey: "SECRET_ACCESS_KEY",
+				}
+			},
+			expected: baseExpectedSpec().
+				WithBackup(apiv1ac.BackupConfiguration().
+					WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
+						WithClassName("snapshot-class").
+						WithOnline(true).
+						WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
+							WithImmediateCheckpoint(true))).
+					WithPgBackRest(apiv1ac.PgBackRestConfiguration().
+						WithRepository(apiv1ac.PgBackRestRepository().
+							WithS3(apiv1ac.PgBackRestS3().
+								WithBucket("s3://example-backups").
+								WithRegion("auto").
+								WithEndpoint("https://s3.example.com").
+								WithInheritFromIAMRole(false).
+								WithAccessKeyID(machineryapi.SecretKeySelector{
+									LocalObjectReference: machineryapi.LocalObjectReference{Name: "backup-s3-credentials"},
+									Key:                  "ACCESS_KEY_ID",
+								}).
+								WithSecretAccessKey(machineryapi.SecretKeySelector{
+									LocalObjectReference: machineryapi.LocalObjectReference{Name: "backup-s3-credentials"},
+									Key:                  "SECRET_ACCESS_KEY",
+								}))).
+						WithOptions(apiv1ac.PgBackRestOptions().
+							WithCompressType("lz4").
+							WithArchiveAsync(true).
+							WithArchivePushQueueMax("2GiB").
+							WithArchiveGetQueueMax("2GiB").
+							WithBundle(true).
+							WithBlockIncremental(true).
+							WithStartFast(true).
+							WithDelta(true).
+							WithPriority(19).
+							WithRetention(apiv1ac.PgBackRestRetention().
+								WithFull(7).
+								WithFullType("time")))).
+					WithTarget(apiv1.BackupTargetStandby)),
+		},
+		{
 			name: "pgbackrest restore from object store",
 			cfgModifier: func(cfg *resources.ClusterConfig) {
 				cfg.BackupSpec = &v1alpha1.BackupSpec{
@@ -586,6 +646,11 @@ func baseClusterConfig() resources.ClusterConfig {
 				VolumeSnapshotClass: new("snapshot-class"),
 			},
 			Image: testImage,
+		},
+		BackupCredentials: resources.BackupCredentials{
+			SecretName:         "minio-eu",
+			AccessKeyIDKey:     "rootUser",
+			SecretAccessKeyKey: "rootPassword",
 		},
 	}
 }

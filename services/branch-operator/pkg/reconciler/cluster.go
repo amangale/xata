@@ -43,6 +43,11 @@ func (r *BranchReconciler) reconcileCluster(
 		Tolerations:       r.Tolerations,
 		EnforceZone:       r.EnforceZone,
 		ImagePullSecrets:  r.ImagePullSecrets,
+		BackupCredentials: resources.BackupCredentials{
+			SecretName:         r.BackupsCredentialsSecretName,
+			AccessKeyIDKey:     r.BackupsCredentialsAccessKeyIDKey,
+			SecretAccessKeyKey: r.BackupsCredentialsSecretAccessKeyKey,
+		},
 	}
 
 	ac := apiv1ac.Cluster(branch.ClusterName(), r.ClustersNamespace).

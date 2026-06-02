@@ -66,6 +66,11 @@ func (r *BranchReconciler) reconcileObjectStore(
 			r.BarmanRegionSecretName,
 			r.BarmanRegionSecretKey,
 			branch.Spec.BackupSpec.Retention,
+			resources.BackupCredentials{
+				SecretName:         r.BackupsCredentialsSecretName,
+				AccessKeyIDKey:     r.BackupsCredentialsAccessKeyIDKey,
+				SecretAccessKeyKey: r.BackupsCredentialsSecretAccessKeyKey,
+			},
 		)
 
 		return nil
