@@ -148,17 +148,20 @@ type BackupCredentials struct {
 }
 
 // ObjectStoreSpec defines the ObjectStoreSpec for a branch's backup storage.
-// It configures S3 storage for CNPG backup retention.
+// It configures cloud-provider object storage for CNPG backup retention.
 //
-// It supports both AWS S3 (IAM-role auth) and S3-compatible endpoints with
-// static credentials (Cloudflare R2 in production, MinIO for local dev), based
-// on whether backupsEndpoint is set.
+// When backupsEndpoint is set the spec uses the AWS-S3 path with static
+// credentials from the configured Secret (Cloudflare R2 in production, MinIO
+// for local dev) and cloudProvider is ignored. Otherwise cloudProvider
+// selects the credential shape: "gcp" wires barman to GKE workload identity
+// federation; "aws" wires barman to inherit the pod's IAM role.
 func ObjectStoreSpec(
 	backupsBucket,
 	backupsEndpoint,
 	barmanRegionSecretName,
 	barmanRegionSecretKey,
-	retention string,
+	retention,
+	cloudProvider string,
 	credentials BackupCredentials,
 ) barmanPluginApi.ObjectStoreSpec {
 	awsCredentials := &apiv1.S3Credentials{
@@ -200,9 +203,9 @@ func ObjectStoreSpec(
 	}
 
 	// A custom endpoint means a non-AWS, S3-compatible store (e.g. Cloudflare R2
-	// or MinIO for local dev). There's no IAM role to inherit, so
-	// switch to static credentials from the configured Secret. The region
-	// reference is kept: R2 expects a region ("auto") and MinIO ignores it.
+	// or MinIO for local dev). There's no IAM role to inherit, so switch to
+	// static credentials from the configured Secret. The region reference is
+	// kept: R2 expects a region ("auto") and MinIO ignores it.
 	if backupsEndpoint != "" {
 		spec.Configuration.EndpointURL = backupsEndpoint
 		awsCredentials.InheritFromIAMRole = false
@@ -217,6 +220,15 @@ func ObjectStoreSpec(
 				Name: credentials.SecretName,
 			},
 			Key: credentials.SecretAccessKeyKey,
+		}
+		return spec
+	}
+
+	// GKE workload identity federation: barman authenticates as the pod's GSA
+	// directly, no static credentials needed.
+	if cloudProvider == "gcp" {
+		spec.Configuration.BarmanCredentials = apiv1.BarmanCredentials{
+			Google: &apiv1.GoogleCredentials{GKEEnvironment: true},
 		}
 	}
 

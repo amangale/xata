@@ -19,6 +19,7 @@ type Config struct {
 	BackupsCredentialsSecretName         string   `env:"XATA_BACKUPS_CREDENTIALS_SECRET_NAME" env-default:"minio-eu" env-description:"Secret (in the clusters namespace) holding static S3 credentials, used when XATA_BACKUPS_ENDPOINT is set"`
 	BackupsCredentialsAccessKeyIDKey     string   `env:"XATA_BACKUPS_CREDENTIALS_ACCESS_KEY_ID_KEY" env-default:"rootUser" env-description:"key in the credentials Secret holding the access key ID"`
 	BackupsCredentialsSecretAccessKeyKey string   `env:"XATA_BACKUPS_CREDENTIALS_SECRET_ACCESS_KEY_KEY" env-default:"rootPassword" env-description:"key in the credentials Secret holding the secret access key"`
+	CloudProvider                        string   `env:"XATA_CLOUD_PROVIDER" env-default:"aws" env-description:"cloud provider for per-Branch identity and backup credentials: aws or gcp"`
 	BarmanRegionSecretName               string   `env:"XATA_BARMAN_REGION_SECRET_NAME" env-default:"barman-dummy-secret" env-description:"chart-managed secret referenced as the barman AWS region"`
 	BarmanRegionSecretKey                string   `env:"XATA_BARMAN_REGION_SECRET_KEY" env-default:"dummy" env-description:"key in the chart-managed barman AWS region secret"`
 	TolerationsRaw                       []string `env:"XATA_CLUSTERS_TOLERATIONS" env-default:"xata.io/workload=dataplane:NoSchedule" env-separator:"," env-description:"tolerations for cluster pods in the format key=value:effect"`

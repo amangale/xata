@@ -229,6 +229,7 @@ func TestObjectStoreSpec(t *testing.T) {
 
 	testcases := []struct {
 		name             string
+		cloudProvider    string
 		backupsBucket    string
 		backupsEndpoint  string
 		regionSecretName string
@@ -239,6 +240,7 @@ func TestObjectStoreSpec(t *testing.T) {
 	}{
 		{
 			name:             "production mode with IAM role - bucket A",
+			cloudProvider:    "aws",
 			backupsBucket:    "s3://prod-backup-bucket/path/to/backups",
 			backupsEndpoint:  "",
 			regionSecretName: "barman-dummy-secret",
@@ -284,6 +286,7 @@ func TestObjectStoreSpec(t *testing.T) {
 		},
 		{
 			name:             "production mode with IAM role - bucket without region suffix",
+			cloudProvider:    "aws",
 			backupsBucket:    "s3://another-prod-bucket/different/path",
 			backupsEndpoint:  "",
 			regionSecretName: "custom-barman-region-secret",
@@ -329,6 +332,7 @@ func TestObjectStoreSpec(t *testing.T) {
 		},
 		{
 			name:             "local mode with MinIO - bucket C",
+			cloudProvider:    "aws",
 			backupsBucket:    "s3://dev-bucket/backups",
 			backupsEndpoint:  "http://minio.local:9000",
 			regionSecretName: "barman-dummy-secret",
@@ -392,6 +396,7 @@ func TestObjectStoreSpec(t *testing.T) {
 		},
 		{
 			name:             "local mode with MinIO - bucket D",
+			cloudProvider:    "aws",
 			backupsBucket:    "s3://test-bucket/test/path",
 			backupsEndpoint:  "http://minio-test.cluster.local:9000",
 			regionSecretName: "barman-dummy-secret",
@@ -520,6 +525,123 @@ func TestObjectStoreSpec(t *testing.T) {
 		},
 	}
 
+	testcases = append(testcases, []struct {
+		name             string
+		cloudProvider    string
+		backupsBucket    string
+		backupsEndpoint  string
+		regionSecretName string
+		regionSecretKey  string
+		retention        string
+		credentials      resources.BackupCredentials
+		want             barmanPluginApi.ObjectStoreSpec
+	}{
+		{
+			name:             "GCP mode with workload identity federation",
+			cloudProvider:    "gcp",
+			backupsBucket:    "gs://prod-gcs-backups/path/to/backups",
+			backupsEndpoint:  "",
+			regionSecretName: "barman-dummy-secret",
+			regionSecretKey:  "dummy",
+			retention:        "60d",
+			want: barmanPluginApi.ObjectStoreSpec{
+				RetentionPolicy: "60d",
+				Configuration: apiv1.BarmanObjectStoreConfiguration{
+					DestinationPath: "gs://prod-gcs-backups/path/to/backups",
+					BarmanCredentials: apiv1.BarmanCredentials{
+						Google: &apiv1.GoogleCredentials{
+							GKEEnvironment: true,
+						},
+					},
+					Wal: &apiv1.WalBackupConfiguration{
+						Compression: barmanApi.CompressionTypeGzip,
+					},
+					Data: &apiv1.DataBackupConfiguration{
+						Compression:           barmanApi.CompressionTypeGzip,
+						AdditionalCommandArgs: []string{"--min-chunk-size=5MB", "--read-timeout=60", "-vv"},
+					},
+				},
+				InstanceSidecarConfiguration: barmanPluginApi.InstanceSidecarConfiguration{
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							v1.ResourceCPU:    resource.MustParse("100m"),
+							v1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+						Limits: v1.ResourceList{
+							v1.ResourceCPU:    resource.MustParse("250m"),
+							v1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+					},
+					RetentionPolicyIntervalSeconds: 86400,
+				},
+			},
+		},
+		{
+			name:             "S3-compatible endpoint override wins when cloud=gcp",
+			cloudProvider:    "gcp",
+			backupsBucket:    "s3://dev-bucket/backups",
+			backupsEndpoint:  "http://minio.local:9000",
+			regionSecretName: "barman-dummy-secret",
+			regionSecretKey:  "dummy",
+			retention:        "7d",
+			credentials: resources.BackupCredentials{
+				SecretName:         "minio-eu",
+				AccessKeyIDKey:     "rootUser",
+				SecretAccessKeyKey: "rootPassword",
+			},
+			want: barmanPluginApi.ObjectStoreSpec{
+				RetentionPolicy: "7d",
+				Configuration: apiv1.BarmanObjectStoreConfiguration{
+					DestinationPath: "s3://dev-bucket/backups",
+					EndpointURL:     "http://minio.local:9000",
+					BarmanCredentials: apiv1.BarmanCredentials{
+						AWS: &apiv1.S3Credentials{
+							InheritFromIAMRole: false,
+							RegionReference: &apiv1.SecretKeySelector{
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "barman-dummy-secret",
+								},
+								Key: "dummy",
+							},
+							AccessKeyIDReference: &apiv1.SecretKeySelector{
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "minio-eu",
+								},
+								Key: "rootUser",
+							},
+							SecretAccessKeyReference: &apiv1.SecretKeySelector{
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "minio-eu",
+								},
+								Key: "rootPassword",
+							},
+						},
+					},
+					Wal: &apiv1.WalBackupConfiguration{
+						Compression: barmanApi.CompressionTypeGzip,
+					},
+					Data: &apiv1.DataBackupConfiguration{
+						Compression:           barmanApi.CompressionTypeGzip,
+						AdditionalCommandArgs: []string{"--min-chunk-size=5MB", "--read-timeout=60", "-vv"},
+					},
+				},
+				InstanceSidecarConfiguration: barmanPluginApi.InstanceSidecarConfiguration{
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							v1.ResourceCPU:    resource.MustParse("100m"),
+							v1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+						Limits: v1.ResourceList{
+							v1.ResourceCPU:    resource.MustParse("250m"),
+							v1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+					},
+					RetentionPolicyIntervalSeconds: 86400,
+				},
+			},
+		},
+	}...)
+
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := resources.ObjectStoreSpec(
@@ -528,10 +650,14 @@ func TestObjectStoreSpec(t *testing.T) {
 				tc.regionSecretName,
 				tc.regionSecretKey,
 				tc.retention,
+				tc.cloudProvider,
 				tc.credentials,
 			)
 
 			require.Equal(t, tc.want, got)
+			if tc.cloudProvider == "gcp" && tc.backupsEndpoint == "" {
+				require.Nil(t, got.Configuration.AWS)
+			}
 		})
 	}
 }

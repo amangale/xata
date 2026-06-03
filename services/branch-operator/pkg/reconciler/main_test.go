@@ -63,6 +63,7 @@ func TestMain(m *testing.M) {
 					ClustersNamespace:      XataClustersNamespace,
 					BackupsBucket:          "s3://some-bucket",
 					BackupsEndpoint:        "",
+					CloudProvider:          "aws",
 					BarmanRegionSecretName: "barman-dummy-secret",
 					BarmanRegionSecretKey:  "dummy",
 					Tolerations:            nil,

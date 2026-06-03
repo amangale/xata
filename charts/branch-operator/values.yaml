@@ -9,6 +9,7 @@ config:
   branchOperator:
     imageSecrets: ghcr-secret
     clustersTolerations: "xata.io/workload=dataplane:NoSchedule"
+    cloudProvider: aws
     barmanRegionSecret:
       # Without this barman will create a role and bind it to our CNPG pods with
       # '*' permissions to all secrets in the namespace. This is a problem if

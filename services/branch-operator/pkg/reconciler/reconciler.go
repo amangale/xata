@@ -50,6 +50,7 @@ type BranchReconciler struct {
 	BackupsCredentialsSecretName         string
 	BackupsCredentialsAccessKeyIDKey     string
 	BackupsCredentialsSecretAccessKeyKey string
+	CloudProvider                        string
 	BarmanRegionSecretName               string
 	BarmanRegionSecretKey                string
 	Tolerations                          []v1.Toleration

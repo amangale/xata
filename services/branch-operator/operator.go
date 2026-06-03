@@ -161,6 +161,7 @@ func (s *BranchOperatorService) Init(ctx context.Context) error {
 		BackupsCredentialsSecretName:         s.config.BackupsCredentialsSecretName,
 		BackupsCredentialsAccessKeyIDKey:     s.config.BackupsCredentialsAccessKeyIDKey,
 		BackupsCredentialsSecretAccessKeyKey: s.config.BackupsCredentialsSecretAccessKeyKey,
+		CloudProvider:                        s.config.CloudProvider,
 		BarmanRegionSecretName:               s.config.BarmanRegionSecretName,
 		BarmanRegionSecretKey:                s.config.BarmanRegionSecretKey,
 		Tolerations:                          s.config.Tolerations,
