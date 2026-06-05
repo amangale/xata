@@ -38,6 +38,7 @@ const (
 	OperatorName                   = "branch-operator"
 	ReconciliationPausedAnnotation = "xata.io/reconciliation-paused"
 	ClusterOwnerKey                = ".metadata.ownerReferences[controller=true].name"
+	PoolerOwnerKey                 = ".metadata.ownerReferences[controller=true].name"
 )
 
 // BranchReconciler reconciles a Branch object
@@ -199,6 +200,13 @@ func (r *BranchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	// Reconcile any other Poolers owned by the branch
+	_, err = r.reconcileOwnedPoolers(ctx, branch)
+	if err != nil {
+		log.Error(err, "deleting extra Poolers")
+		return ctrl.Result{}, err
+	}
+
 	// Reconcile the ScheduledBackup for the branch
 	_, err = r.reconcileScheduledBackup(ctx, branch)
 	if err != nil {
@@ -254,20 +262,24 @@ func (r *BranchReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manage
 }
 
 // setupIndexers sets up field indexers for efficient lookups of the Clusters
-// owned by a Branch
+// and Poolers owned by a Branch
 func setupIndexers(ctx context.Context, mgr ctrl.Manager) error {
-	return mgr.GetFieldIndexer().IndexField(ctx, &apiv1.Cluster{}, ClusterOwnerKey,
-		func(obj client.Object) []string {
-			owner := metav1.GetControllerOf(obj)
-			if owner == nil {
-				return nil
-			}
-			if owner.APIVersion != v1alpha1.GroupVersion.String() || owner.Kind != "Branch" {
-				return nil
-			}
-			return []string{owner.Name}
-		},
-	)
+	branchOwnerName := func(obj client.Object) []string {
+		owner := metav1.GetControllerOf(obj)
+		if owner == nil {
+			return nil
+		}
+		if owner.APIVersion != v1alpha1.GroupVersion.String() || owner.Kind != "Branch" {
+			return nil
+		}
+		return []string{owner.Name}
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &apiv1.Cluster{}, ClusterOwnerKey, branchOwnerName); err != nil {
+		return err
+	}
+
+	return mgr.GetFieldIndexer().IndexField(ctx, &apiv1.Pooler{}, PoolerOwnerKey, branchOwnerName)
 }
 
 // isReconciliationPaused checks if the Branch has the reconciliation paused

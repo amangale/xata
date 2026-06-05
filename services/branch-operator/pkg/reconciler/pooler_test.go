@@ -240,4 +240,62 @@ func TestPoolerReconciliation(t *testing.T) {
 			})
 		})
 	})
+
+	t.Run("pooler is named after the cluster, not the branch", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		// Use a cluster name that differs from the branch name, as happens for
+		// warm-pool branches assigned a pre-provisioned cluster.
+		clusterName := "pool-cluster-" + randomString(6)
+		branch := NewBranchBuilder().WithPooler().WithClusterName(new(clusterName)).Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			// Expect the Pooler to be named after the cluster
+			requireEventuallyNoErr(t, func() error {
+				pooler := apiv1.Pooler{}
+				return getK8SObject(ctx, clusterName+reconciler.PoolerSuffix, &pooler)
+			})
+
+			// Expect no Pooler named after the branch
+			pooler := apiv1.Pooler{}
+			err := getK8SObject(ctx, br.Name+reconciler.PoolerSuffix, &pooler)
+			require.True(t, apierrors.IsNotFound(err))
+		})
+	})
+
+	t.Run("pooler is renamed and the old one removed when the cluster changes", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		oldCluster := "pool-cluster-" + randomString(6)
+		branch := NewBranchBuilder().WithPooler().WithClusterName(new(oldCluster)).Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			pooler := apiv1.Pooler{}
+
+			// Expect the Pooler named after the original cluster
+			requireEventuallyNoErr(t, func() error {
+				return getK8SObject(ctx, oldCluster+reconciler.PoolerSuffix, &pooler)
+			})
+
+			// Point the Branch at a different cluster
+			newCluster := "pool-cluster-" + randomString(6)
+			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.Name = new(newCluster)
+			})
+			require.NoError(t, err)
+
+			// Expect a Pooler named after the new cluster
+			requireEventuallyNoErr(t, func() error {
+				return getK8SObject(ctx, newCluster+reconciler.PoolerSuffix, &pooler)
+			})
+
+			// Expect the old Pooler to be deleted
+			requireEventuallyTrue(t, func() bool {
+				err := getK8SObject(ctx, oldCluster+reconciler.PoolerSuffix, &pooler)
+				return apierrors.IsNotFound(err)
+			})
+		})
+	})
 }

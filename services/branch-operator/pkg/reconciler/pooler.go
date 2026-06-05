@@ -6,10 +6,9 @@ import (
 
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	apiv1ac "github.com/xataio/xata-cnpg/pkg/client/applyconfiguration/api/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"xata/services/branch-operator/api/v1alpha1"
 	"xata/services/branch-operator/pkg/reconciler/resources"
@@ -17,33 +16,28 @@ import (
 
 const PoolerSuffix = "-pooler"
 
+// desiredPoolerName returns the name of the Pooler the Branch should have, or
+// "" when no Pooler is desired. The Pooler is named after the cluster it fronts
+// so it matches the Cluster, and only exists when the Branch both specifies a
+// pooler configuration and has a cluster.
+func desiredPoolerName(branch *v1alpha1.Branch) string {
+	if !branch.Spec.Pooler.IsEnabled() || !branch.HasClusterName() {
+		return ""
+	}
+	return branch.ClusterName() + PoolerSuffix
+}
+
 // reconcilePooler ensures that the correct Pooler exists for the given Branch
-// when a pooler is configured. When Pooler is nil, it ensures no Pooler exists.
+// when a pooler is configured. The Pooler is named after the Branch's cluster
+// so it matches the Cluster it fronts. Poolers left behind by a cluster rename,
+// a disabled pooler or an unset cluster are removed by reconcileOwnedPoolers.
 func (r *BranchReconciler) reconcilePooler(
 	ctx context.Context,
 	branch *v1alpha1.Branch,
 ) error {
-	name := branch.Name + PoolerSuffix
-
-	// Ensure the pooler does not exist when either:
-	// * The branch does not specify a pooler configuration
-	// * The branch does not have a Cluster associated with it
-	if !branch.Spec.Pooler.IsEnabled() || !branch.HasClusterName() {
-		pooler := &apiv1.Pooler{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: r.ClustersNamespace,
-			},
-		}
-		err := r.Get(ctx, types.NamespacedName{
-			Name:      name,
-			Namespace: r.ClustersNamespace,
-		}, pooler)
-		if err != nil {
-			return client.IgnoreNotFound(err)
-		}
-
-		return r.Delete(ctx, pooler)
+	name := desiredPoolerName(branch)
+	if name == "" {
+		return nil
 	}
 
 	ac := apiv1ac.Pooler(name, r.ClustersNamespace).
@@ -58,7 +52,7 @@ func (r *BranchReconciler) reconcilePooler(
 		WithSpec(resources.PoolerSpec(
 			branch.ClusterName(),
 			branch.Spec.Pooler.Instances,
-			!branch.HasClusterName() || branch.Spec.ClusterSpec.Hibernation.IsEnabled(),
+			branch.Spec.ClusterSpec.Hibernation.IsEnabled(),
 			apiv1.PgBouncerPoolMode(branch.Spec.Pooler.Mode),
 			branch.Spec.Pooler.MaxClientConn,
 			defaultPoolSize(branch),
@@ -69,6 +63,48 @@ func (r *BranchReconciler) reconcilePooler(
 		))
 
 	return r.Apply(ctx, ac, client.FieldOwner(OperatorName), client.ForceOwnership)
+}
+
+// reconcileOwnedPoolers ensures that only the Pooler named after the Branch's
+// cluster is owned by the Branch, deleting any other Poolers owned by the
+// Branch. This cleans up poolers left behind by a cluster rename, a disabled
+// pooler or an unset cluster
+func (r *BranchReconciler) reconcileOwnedPoolers(
+	ctx context.Context,
+	branch *v1alpha1.Branch,
+) (controllerutil.OperationResult, error) {
+	keepName := desiredPoolerName(branch)
+
+	var poolerList apiv1.PoolerList
+	err := r.List(ctx, &poolerList,
+		client.InNamespace(r.ClustersNamespace),
+		client.MatchingFields{PoolerOwnerKey: branch.Name},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	result := controllerutil.OperationResultNone
+	for i := range poolerList.Items {
+		pooler := &poolerList.Items[i]
+
+		// Don't delete the Pooler we should keep
+		if pooler.Name == keepName {
+			continue
+		}
+
+		// Don't delete Poolers that are already being deleted
+		if !pooler.DeletionTimestamp.IsZero() {
+			continue
+		}
+
+		if err := r.Delete(ctx, pooler); err != nil {
+			return "", client.IgnoreNotFound(err)
+		}
+		result = controllerutil.OperationResultUpdated
+	}
+
+	return result, nil
 }
 
 // defaultPoolSize returns the PgBouncer default_pool_size to set for the

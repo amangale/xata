@@ -51,7 +51,7 @@ func (r *BranchReconciler) reconcileAdditionalServicePooler(
 	ctx context.Context,
 	branch *v1alpha1.Branch,
 ) (controllerutil.OperationResult, error) {
-	if !branch.Spec.Pooler.IsEnabled() {
+	if !branch.Spec.Pooler.IsEnabled() || !branch.HasClusterName() {
 		return controllerutil.OperationResultNone, nil
 	}
 
@@ -63,7 +63,9 @@ func (r *BranchReconciler) reconcileAdditionalServicePooler(
 		},
 	}
 
-	poolerName := branch.Name + PoolerSuffix
+	// The Service keeps its branch-based name so callers addressing it are
+	// unaffected, but its selector must target the cluster-named pooler's pods.
+	poolerName := branch.ClusterName() + PoolerSuffix
 
 	result, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
 		if err := controllerutil.SetControllerReference(branch, svc, r.Scheme); err != nil {
