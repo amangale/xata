@@ -11,3 +11,7 @@ config:
     openebs:
       enabled: false
       namespace: openebs
+    pgbackrest:
+      bucket: "backups"
+      region: "us-east-1"
+      endpoint: "http://minio-eu.xata-clusters:9000"

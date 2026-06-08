@@ -17,6 +17,7 @@ type Config struct {
 	XatastorEnabled             bool              `env:"XATA_XATASTOR_ENABLED" env-default:"false" env-description:"whether the xatastor StorageClass is deployed in this cell"`
 	PgBackRestBucket            string            `env:"XATA_PGBACKREST_BUCKET" env-default:"" env-description:"S3 bucket for pgbackrest backups"`
 	PgBackRestRegion            string            `env:"XATA_BACKUPS_REGION" env-default:"" env-description:"S3 region for pgbackrest backups"`
+	PgBackRestEndpoint          string            `env:"XATA_PGBACKREST_ENDPOINT" env-default:"" env-description:"S3 endpoint for pgbackrest backups; set for a non-AWS S3-compatible store such as MinIO (local dev) or Cloudflare R2"`
 
 	// VictoriaMetricsURL points at the cell-local VictoriaMetrics single-node
 	// instance used to back GetBranchMetrics. Empty means no metrics backend

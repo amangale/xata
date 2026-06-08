@@ -284,12 +284,15 @@ func (b *BranchBuilder) WithDefaultVolumeSnapshotClass(vsc string) *BranchBuilde
 	return b
 }
 
-// WithPgBackRestS3 sets the S3 bucket and region on the PgBackRest spec.
-// Only applies when the backup method is pgbackrest.
-func (b *BranchBuilder) WithPgBackRestS3(bucket, region string) *BranchBuilder {
+// WithPgBackRestS3 sets the S3 bucket, region and endpoint on the PgBackRest
+// spec. Only applies when the backup method is pgbackrest. A non-empty endpoint
+// targets a non-AWS S3-compatible store (MinIO, Cloudflare R2), which makes the
+// operator authenticate with static credentials instead of an IAM role.
+func (b *BranchBuilder) WithPgBackRestS3(bucket, region, endpoint string) *BranchBuilder {
 	if b.branch.Spec.BackupSpec != nil && b.branch.Spec.BackupSpec.IsPgBackRest() {
 		b.branch.Spec.BackupSpec.PgBackRest.Bucket = bucket
 		b.branch.Spec.BackupSpec.PgBackRest.Region = region
+		b.branch.Spec.BackupSpec.PgBackRest.Endpoint = endpoint
 	}
 	return b
 }

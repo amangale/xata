@@ -29,4 +29,7 @@ data:
   {{- if .Values.config.clusters.pgbackrest.region }}
   XATA_BACKUPS_REGION: {{ .Values.config.clusters.pgbackrest.region | quote }}
   {{- end }}
+  {{- if .Values.config.clusters.pgbackrest.endpoint }}
+  XATA_PGBACKREST_ENDPOINT: {{ .Values.config.clusters.pgbackrest.endpoint | quote }}
+  {{- end }}
   {{- end }}

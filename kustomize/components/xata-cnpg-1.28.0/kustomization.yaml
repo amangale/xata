@@ -3,7 +3,7 @@ kind: Component
 helmCharts:
   - name: cloudnative-pg
     repo: oci://ghcr.io/xataio/xata-cnpg/charts
-    version: 0.0.0-g00047bef1
+    version: 0.0.0-g5f61b4906
     releaseName: cloudnative-pg
     namespace: cnpg-system
     valuesFile: cloudnative-pg-values.yaml

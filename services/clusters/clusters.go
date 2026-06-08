@@ -275,7 +275,7 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		WithDefaultVolumeSnapshotClass(volumeSnapshotClass).
 		WithDefaultNodeSelector(c.config.ClustersNodeSelector).
 		WithPooler(c.config.EnablePooler).
-		WithPgBackRestS3(c.config.PgBackRestBucket, c.config.PgBackRestRegion).
+		WithPgBackRestS3(c.config.PgBackRestBucket, c.config.PgBackRestRegion, c.config.PgBackRestEndpoint).
 		WithXataUtilsPreloadLibrary().
 		WithMandatoryPostgresParameters()
 
