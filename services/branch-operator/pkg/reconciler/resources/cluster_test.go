@@ -442,6 +442,7 @@ func TestClusterSpec(t *testing.T) {
 				}
 			},
 			expected: baseExpectedSpec().
+				WithPlugins(scaleToZeroPlugin()).
 				WithBackup(apiv1ac.BackupConfiguration().
 					WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
 						WithClassName("snapshot-class").
