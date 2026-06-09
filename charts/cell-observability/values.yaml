@@ -31,6 +31,11 @@ victoria-logs:
   server:
     fullnameOverride: victoria-logs
     retentionPeriod: 30d
+    # Default cap is 256KiB; large CNPG records (huge IN(...) queries, boto3
+    # backup dumps) exceed it and VictoriaLogs drops the whole record. Vector
+    # truncates upstream (see cnpg_unwrap), so this is just headroom above that.
+    extraArgs:
+      insert.maxLineSizeBytes: 1MiB
     podSecurityContext:
       enabled: true
       runAsNonRoot: true
@@ -248,10 +253,24 @@ vector:
           }
           ._msg = del(.message)
           ._time = del(.timestamp)
+          # VictoriaLogs drops any line over its size cap; truncate so the
+          # useful head still ingests and per-record storage stays bounded.
+          msg = string(._msg) ?? ""
+          if length(msg) > 200000 {
+            ._msg = truncate(msg, limit: 200000, suffix: " [truncated]")
+          }
+      # Empty _msg events make VictoriaLogs log "missing log message after the
+      # create/index command"; drop them before the bulk sink.
+      drop_empty:
+        type: filter
+        inputs: [cnpg_unwrap]
+        condition:
+          type: vrl
+          source: "!is_nullish(._msg)"
     sinks:
       vl_logs:
         type: elasticsearch
-        inputs: [cnpg_unwrap]
+        inputs: [drop_empty]
         endpoints: [http://victoria-logs:9428/insert/elasticsearch/]
         api_version: v8
         mode: bulk
