@@ -43,6 +43,7 @@ type PostgresParameterSpec struct {
 	DocsLink               string
 	Recommendation         string
 	RestartRequired        bool
+	AllowEmpty             bool
 	PostgresMinimumVersion *int   // Optional minimum PostgreSQL major version (e.g. 15, 17, 18)
 	Extension              string // Optional extension name - parameter only available if extension exists for the image
 }
@@ -59,6 +60,7 @@ type yamlParameterSpec struct {
 	DocsLink               string   `yaml:"docs_link"`
 	Recommendation         string   `yaml:"recommendation,omitempty"`
 	RestartRequired        bool     `yaml:"restart_required,omitempty"`
+	AllowEmpty             bool     `yaml:"allow_empty,omitempty"`
 	PostgresMinimumVersion *int     `yaml:"postgres_minimum_version,omitempty"`
 	Extension              string   `yaml:"extension,omitempty"`
 }
@@ -129,6 +131,7 @@ func convertYAMLSpec(yamlSpec yamlParameterSpec) (PostgresParameterSpec, error) 
 		DocsLink:               yamlSpec.DocsLink,
 		Recommendation:         yamlSpec.Recommendation,
 		RestartRequired:        yamlSpec.RestartRequired,
+		AllowEmpty:             yamlSpec.AllowEmpty,
 		PostgresMinimumVersion: yamlSpec.PostgresMinimumVersion,
 		Extension:              yamlSpec.Extension,
 	}, nil
@@ -306,8 +309,7 @@ func ValidateParameterValue(spec PostgresParameterSpec, value string) error {
 	case ParamTypeBoolean:
 		return validateBooleanValue(spec, value)
 	case ParameterTypeString:
-		// String parameters don't need validation beyond being non-empty
-		if value == "" {
+		if value == "" && !spec.AllowEmpty {
 			return fmt.Errorf("string parameter cannot be empty")
 		}
 		return nil

@@ -3487,10 +3487,7 @@ func TestBranchLogs(t *testing.T) {
 	mockClusters := protomocks.NewClustersServiceClient(t)
 	mockCells := cellsmock.NewCellsMock(t, mockClusters)
 	mockMetrics := metricsmock.NewClient(t)
-	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-
-	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", mockMetrics, mockMetrics, sched, analyticsmocks.NewClient(t), nil, nil)
 	e := apitest.New(t).WithClaims(apitest.TestClaims)
 
 	branchID := "branchID"
@@ -3569,6 +3566,7 @@ func TestBranchLogs(t *testing.T) {
 
 	branchLogsTests := map[string]struct {
 		branchID       string
+		pgAuditOn      bool
 		req            spec.BranchLogsRequest
 		setupMocks     func()
 		expectedError  error
@@ -3775,8 +3773,44 @@ func TestBranchLogs(t *testing.T) {
 			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "end", Message: "maximum date range is 4320h0m0s"},
 			expectedStatus: http.StatusBadRequest,
 		},
-		"no user filters: handler passes empty slice (backend enforces branch scope)": {
+		"no user filters: handler only passes the audit-exclusion filter (pgaudit flag off)": {
 			branchID: branchID,
+			req: spec.BranchLogsRequest{
+				Start: start,
+				End:   end,
+			},
+			setupMocks: func() {
+				mockMetrics.EXPECT().GetLogs(
+					mock.Anything,
+					mock.Anything,
+					mock.Anything,
+					start,
+					end,
+					mock.Anything,
+					mock.MatchedBy(func(filters []metrics.LogFilter) bool {
+						return len(filters) == 1 &&
+							filters[0].Field == "logger" &&
+							filters[0].Op == "in" &&
+							len(filters[0].Values) == 1 &&
+							filters[0].Values[0] == "postgres"
+					}),
+					100,
+					"",
+				).Return(&metrics.BranchLogs{
+					Start: start,
+					End:   end,
+					Logs:  []metrics.LogEntry{},
+				}, nil).Once()
+				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", branchID).Return(&store.Branch{ID: branchID}, nil).Once()
+			},
+			assertResponse: func(t *testing.T, got metrics.BranchLogs) {
+				require.Len(t, got.Logs, 0)
+			},
+			expectedStatus: http.StatusOK,
+		},
+		"pgaudit flag on: handler appends no audit-exclusion filter": {
+			branchID:  branchID,
+			pgAuditOn: true,
 			req: spec.BranchLogsRequest{
 				Start: start,
 				End:   end,
@@ -3917,6 +3951,9 @@ func TestBranchLogs(t *testing.T) {
 	for name, tc := range branchLogsTests {
 		t.Run(name, func(t *testing.T) {
 			tc.setupMocks()
+
+			feat := openfeaturetest.NewClient(map[openfeature.FeatureFlag]bool{flags.PgAuditLogs: tc.pgAuditOn})
+			apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", mockMetrics, mockMetrics, sched, analyticsmocks.NewClient(t), nil, nil)
 
 			c, rec := e.POST("/").WithJSONBody(tc.req).Context()
 			err := apiHandler.BranchLogs(c, apitest.TestOrganization, "project_id", tc.branchID)

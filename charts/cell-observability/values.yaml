@@ -220,18 +220,29 @@ vector:
         #   {"level":"info","logger":"postgres","msg":"record","record":{
         #     "error_severity":"INFO","backend_type":"client backend",
         #     "message":"...", ...}}
+        # pgaudit records as
+        #   {"level":"info","logger":"pgaudit","msg":"record","record":{
+        #     "error_severity":"LOG","backend_type":"client backend",
+        #     "message":"","audit":{"audit_type":"SESSION",...}}}
         # CNPG instance-manager / barman lines as
         #   {"level":"info","logger":"instance-manager","msg":"..."}
-        # The query side (observability/logs.go) filters on logger="postgres"
-        # and reads severity_text + backend_type, so capture all three here.
-        # Also promote xata.io/branchID to a top-level branch_id field.
+        # The query side (observability/logs.go) filters on logger and reads
+        # severity_text + backend_type. For pgaudit we keep the full envelope
+        # in _msg so the read side can reconstruct the native CSV; backend_type
+        # is forced to "pgaudit" so the process filter targets audit rows
+        # without colliding with the underlying "client backend".
         source: |
+          logger = "unknown"
           if starts_with(string!(.message), "{") && ends_with(string!(.message), "}") {
             parsed, err = parse_json(.message)
             if err == null {
-              if exists(parsed.record.message) {
+              if exists(parsed.logger) {
+                logger = string!(parsed.logger)
+                .logger = logger
+              }
+              if logger != "pgaudit" && exists(parsed.record.message) {
                 .message = string!(parsed.record.message)
-              } else if exists(parsed.msg) {
+              } else if logger != "pgaudit" && exists(parsed.msg) {
                 .message = string!(parsed.msg)
               }
               if exists(parsed.record.error_severity) {
@@ -239,11 +250,10 @@ vector:
               } else if exists(parsed.level) {
                 .severity_text = upcase(string!(parsed.level))
               }
-              if exists(parsed.record.backend_type) {
+              if logger == "pgaudit" {
+                .backend_type = "pgaudit"
+              } else if exists(parsed.record.backend_type) {
                 .backend_type = string!(parsed.record.backend_type)
-              }
-              if exists(parsed.logger) {
-                .logger = string!(parsed.logger)
               }
             }
           }

@@ -25,7 +25,7 @@ func TestBuildLogsQL_AppendsBranchScope(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, q, `kubernetes.namespace_name:="xata-clusters"`)
 	require.Contains(t, q, `kubernetes.container_name:="postgres"`)
-	require.Contains(t, q, `logger:="postgres"`, "drops instance-manager / barman lines from the postgres container")
+	require.Contains(t, q, `logger:in ("postgres","pgaudit")`, "scopes to postgres and pgaudit, drops instance-manager / barman")
 	require.Contains(t, q, `branch_id:="br-1"`)
 	require.Contains(t, q, `kubernetes.pod_name:~"^br-1-"`, "legacy fallback for pre-branch_id rows")
 	require.NotContains(t, q, "_time:<", "no resume clause when cursor is empty")
@@ -57,6 +57,10 @@ func TestCompileLogFilter(t *testing.T) {
 		"process in": {
 			filter: LogFilter{Field: "process", Op: "in", Values: []string{"client backend"}},
 			want:   `backend_type:in ("client backend")`,
+		},
+		"logger in": {
+			filter: LogFilter{Field: "logger", Op: "in", Values: []string{"postgres"}},
+			want:   `logger:in ("postgres")`,
 		},
 		"body contains is a literal substring regex on _msg": {
 			filter: LogFilter{Field: "body", Op: "contains", Value: "slow"},
@@ -101,6 +105,7 @@ func TestCompileLogFilter_Rejected(t *testing.T) {
 		"instance only supports in":        {Field: "instance", Op: "contains", Value: "x"},
 		"level only supports in":           {Field: "level", Op: "regex", Value: "x"},
 		"process only supports in":         {Field: "process", Op: "icontains", Value: "x"},
+		"logger only supports in":          {Field: "logger", Op: "contains", Value: "x"},
 		"body rejects in":                  {Field: "body", Op: "in", Values: []string{"x"}},
 		"body rejects unknown op":          {Field: "body", Op: "eq", Value: "x"},
 		"unknown field":                    {Field: "trace_id", Op: "contains", Value: "x"},
@@ -125,7 +130,7 @@ func TestBuildLogsQL_FullQueryLocksScopeAndFields(t *testing.T) {
 	require.NoError(t, err)
 
 	want := `kubernetes.namespace_name:="xata-clusters" AND kubernetes.container_name:="postgres"` +
-		` AND logger:="postgres"` +
+		` AND logger:in ("postgres","pgaudit")` +
 		` AND (branch_id:="br-1" OR kubernetes.pod_name:~"^br-1-")` +
 		` AND _time:<2024-10-27T03:33:20Z` +
 		` AND kubernetes.pod_name:in ("br-1-0")` +
@@ -172,10 +177,56 @@ func TestLogsQuerier_NoCursorWhenPartialPage(t *testing.T) {
 }
 
 func TestUnwrapCNPGBody(t *testing.T) {
-	require.Equal(t, "boom", unwrapCNPGBody(`{"record":{"message":"boom"}}`))
-	require.Equal(t, "lifecycle", unwrapCNPGBody(`{"msg":"lifecycle"}`))
-	require.Equal(t, "plain text", unwrapCNPGBody("plain text"))
-	require.Equal(t, `{"foo":"bar"}`, unwrapCNPGBody(`{"foo":"bar"}`)) // unrecognised JSON shape passes through
+	type cnpgBody struct {
+		msg    string
+		logger string
+	}
+	tests := map[string]struct {
+		body string
+		want cnpgBody
+	}{
+		"postgres record.message": {
+			body: `{"record":{"message":"boom"}}`,
+			want: cnpgBody{msg: "boom"},
+		},
+		"instance-manager msg": {
+			body: `{"msg":"lifecycle"}`,
+			want: cnpgBody{msg: "lifecycle"},
+		},
+		"plain text passes through": {
+			body: "plain text",
+			want: cnpgBody{msg: "plain text"},
+		},
+		"unrecognised JSON shape passes through": {
+			body: `{"foo":"bar"}`,
+			want: cnpgBody{msg: `{"foo":"bar"}`},
+		},
+		"pgaudit SESSION rendered as native CSV with logger stamp": {
+			body: `{"logger":"pgaudit","record":{"message":"","audit":{"audit_type":"SESSION","statement_id":"1","substatement_id":"1","class":"READ","command":"SELECT","object_type":"","object_name":"","statement":"select * from accounts","parameter":"<not logged>"}}}`,
+			want: cnpgBody{
+				msg:    `AUDIT: SESSION,1,1,READ,SELECT,,,select * from accounts,<not logged>`,
+				logger: "pgaudit",
+			},
+		},
+		"pgaudit statement with commas is CSV-quoted": {
+			body: `{"logger":"pgaudit","record":{"audit":{"audit_type":"SESSION","statement_id":"2","substatement_id":"1","class":"WRITE","command":"INSERT","object_type":"TABLE","object_name":"public.t","statement":"insert into t values (1, 2)","parameter":"<not logged>","rows":"1"}}}`,
+			want: cnpgBody{
+				msg:    `AUDIT: SESSION,2,1,WRITE,INSERT,TABLE,public.t,"insert into t values (1, 2)",<not logged>,1`,
+				logger: "pgaudit",
+			},
+		},
+		"pgaudit envelope with non-map audit falls through to record.message but still stamps logger": {
+			body: `{"logger":"pgaudit","record":{"message":"fallback","audit":"not-a-map"}}`,
+			want: cnpgBody{msg: "fallback", logger: "pgaudit"},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			msg, logger := unwrapCNPGBody(tt.body)
+			got := cnpgBody{msg: msg, logger: logger}
+			require.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func TestDecodeRow(t *testing.T) {

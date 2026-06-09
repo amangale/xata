@@ -58,8 +58,15 @@ otelAgent:
             if: 'attributes.logger == "postgres" and attributes.record != nil and attributes.record.backend_type != nil'
             from: attributes.record.backend_type
             to: attributes.backend_type
+          # pgaudit shares postgres backends but is its own audit stream.
+          # Force backend_type so the `process=pgaudit` filter matches at
+          # query time without depending on read-side derivation.
+          - type: add
+            if: 'attributes.logger == "pgaudit"'
+            field: attributes.backend_type
+            value: pgaudit
           - type: severity_parser
-            if: 'attributes.logger == "postgres" and attributes.record != nil and attributes.record.error_severity != nil'
+            if: 'attributes.logger in ["postgres", "pgaudit"] and attributes.record != nil and attributes.record.error_severity != nil'
             parse_from: attributes.record.error_severity
             overwrite_text: true
             mapping:

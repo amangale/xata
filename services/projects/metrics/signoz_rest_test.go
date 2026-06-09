@@ -378,10 +378,10 @@ func TestGetMetric(t *testing.T) {
 			batch, err := client.GetMetrics(context.Background(), "", "", tt.startTime, tt.endTime, tt.branchID, []string{tt.metric}, tt.instances, tt.aggregations)
 
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			require.Len(t, batch, 1)
 			result := &batch[0]
 			assert.Equal(t, tt.metric, result.Metric)
@@ -672,6 +672,54 @@ func TestParseLogRow(t *testing.T) {
 				Level:     new("error"),
 			},
 		},
+		"CNPG pgaudit envelope renders audit record as native CSV line and stamps process": {
+			row: signoz.Querybuildertypesv5RawRow{
+				Timestamp: new(time.Date(2026, 4, 27, 0, 0, 0, 0, time.UTC)),
+				Data: &map[string]any{
+					"body":          `{"level":"info","logger":"pgaudit","msg":"record","record":{"error_severity":"LOG","message":"","audit":{"audit_type":"SESSION","statement_id":"1","substatement_id":"1","class":"READ","command":"SELECT","object_type":"","object_name":"","statement":"select * from accounts","parameter":"<not logged>"}}}`,
+					"severity_text": "INFO",
+				},
+			},
+			wantOK: true,
+			wantLog: LogEntry{
+				Timestamp: time.Date(2026, 4, 27, 0, 0, 0, 0, time.UTC),
+				Message:   `AUDIT: SESSION,1,1,READ,SELECT,,,select * from accounts,<not logged>`,
+				Level:     new("info"),
+				Process:   new("pgaudit"),
+			},
+		},
+		"CNPG pgaudit envelope quotes statement containing commas": {
+			row: signoz.Querybuildertypesv5RawRow{
+				Timestamp: new(time.Date(2026, 4, 27, 0, 0, 0, 0, time.UTC)),
+				Data: &map[string]any{
+					"body":          `{"level":"info","logger":"pgaudit","msg":"record","record":{"error_severity":"LOG","message":"","audit":{"audit_type":"SESSION","statement_id":"2","substatement_id":"1","class":"WRITE","command":"INSERT","object_type":"TABLE","object_name":"public.t","statement":"insert into t values (1, 2)","parameter":"<not logged>","rows":"1"}}}`,
+					"severity_text": "INFO",
+				},
+			},
+			wantOK: true,
+			wantLog: LogEntry{
+				Timestamp: time.Date(2026, 4, 27, 0, 0, 0, 0, time.UTC),
+				Message:   `AUDIT: SESSION,2,1,WRITE,INSERT,TABLE,public.t,"insert into t values (1, 2)",<not logged>,1`,
+				Level:     new("info"),
+				Process:   new("pgaudit"),
+			},
+		},
+		"CNPG pgaudit envelope with non-map audit falls through to record.message but still stamps process": {
+			row: signoz.Querybuildertypesv5RawRow{
+				Timestamp: new(time.Date(2026, 4, 27, 0, 0, 0, 0, time.UTC)),
+				Data: &map[string]any{
+					"body":          `{"level":"info","logger":"pgaudit","record":{"message":"fallback","audit":"not-a-map"}}`,
+					"severity_text": "INFO",
+				},
+			},
+			wantOK: true,
+			wantLog: LogEntry{
+				Timestamp: time.Date(2026, 4, 27, 0, 0, 0, 0, time.UTC),
+				Message:   "fallback",
+				Level:     new("info"),
+				Process:   new("pgaudit"),
+			},
+		},
 		"CNPG instance-manager flat JSON unwraps msg": {
 			row: signoz.Querybuildertypesv5RawRow{
 				Timestamp: new(time.Date(2026, 4, 27, 0, 0, 0, 0, time.UTC)),
@@ -737,6 +785,7 @@ func TestParseLogRow(t *testing.T) {
 			require.Equal(t, tt.wantLog.InstanceID, got.InstanceID)
 			require.Equal(t, tt.wantLog.Message, got.Message)
 			require.Equal(t, ptr.Deref(tt.wantLog.Level, ""), ptr.Deref(got.Level, ""))
+			require.Equal(t, ptr.Deref(tt.wantLog.Process, ""), ptr.Deref(got.Process, ""))
 		})
 	}
 }

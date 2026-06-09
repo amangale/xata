@@ -505,3 +505,108 @@ duckdb.postgres_role:
   default_value: "xata"
   restart_required: true
   docs_link: https://github.com/duckdb/pg_duckdb
+
+# pgaudit
+pgaudit.log:
+  section: Extensions
+  extension: pgaudit
+  parameter_type: string
+  description: "Comma-separated list of statement classes to log: read, write, function, role, ddl, misc, misc_set, all. Prefix a class with `-` to subtract it (e.g. `all, -misc`). Set to `none` to disable session audit logging."
+  default_value: "none"
+  restart_required: false
+  docs_link: https://github.com/pgaudit/pgaudit#pgauditlog
+  recommendation: |
+    pgaudit is opt-in: leave this at `none` until you need audit logging. To enable, list only the classes you need
+    (e.g. `write, ddl` for change tracking, `read, write` for data access auditing) or use `all, -misc, -misc_set`
+    to capture everything except noisy `SET` statements. `all` produces high log volume on busy branches.
+
+pgaudit.log_catalog:
+  section: Extensions
+  extension: pgaudit
+  parameter_type: boolean
+  description: "Enable session logging for statements where every relation is in pg_catalog. Disabling reduces noise from tools like psql and PgAdmin that query the catalog heavily."
+  default_value: "on"
+  restart_required: false
+  docs_link: https://github.com/pgaudit/pgaudit#pgauditlog_catalog
+  recommendation: |
+    Leave `on` (the upstream default) for complete audit coverage. Turn `off` to silence catalog reads from tools like
+    psql and PgAdmin if they overwhelm your audit log.
+
+pgaudit.log_client:
+  section: Extensions
+  extension: pgaudit
+  parameter_type: boolean
+  description: "Whether audit log messages are visible to client processes such as psql. Generally leave disabled; useful for debugging."
+  default_value: "off"
+  restart_required: false
+  docs_link: https://github.com/pgaudit/pgaudit#pgauditlog_client
+  recommendation: |
+    Keep this `off` in production. Note that `pgaudit.log_level` only takes effect when `pgaudit.log_client` is `on`.
+
+pgaudit.log_level:
+  section: Extensions
+  extension: pgaudit
+  parameter_type: enum
+  description: "Log level used for audit log entries. Only effective when `pgaudit.log_client` is `on`."
+  values: ["debug1", "debug2", "debug3", "debug4", "debug5", "info", "notice", "warning", "log"]
+  default_value: "log"
+  restart_required: false
+  docs_link: https://github.com/pgaudit/pgaudit#pgauditlog_level
+  recommendation: |
+    `ERROR`, `FATAL`, and `PANIC` are not allowed. The default `log` is appropriate for most cases; `notice` can be
+    useful when surfacing audit messages to interactive sessions during testing.
+
+pgaudit.log_relation:
+  section: Extensions
+  extension: pgaudit
+  parameter_type: boolean
+  description: "Create a separate audit log entry for each relation (TABLE, VIEW, etc.) referenced in a SELECT or DML statement."
+  default_value: "off"
+  restart_required: false
+  docs_link: https://github.com/pgaudit/pgaudit#pgauditlog_relation
+  recommendation: |
+    Useful as a shortcut for exhaustive logging without configuring object audit logging via `pgaudit.role`. Increases
+    log volume substantially on multi-relation queries.
+
+pgaudit.log_rows:
+  section: Extensions
+  extension: pgaudit
+  parameter_type: boolean
+  description: "Include the number of rows retrieved or affected by a statement. When enabled the rows field is appended after the parameter field."
+  default_value: "off"
+  restart_required: false
+  docs_link: https://github.com/pgaudit/pgaudit#pgauditlog_rows
+
+pgaudit.log_statement:
+  section: Extensions
+  extension: pgaudit
+  parameter_type: boolean
+  description: "Include the statement text (and parameters, if enabled) in audit log entries. Disable for less verbose logs when statement text is not required."
+  default_value: "on"
+  restart_required: false
+  docs_link: https://github.com/pgaudit/pgaudit#pgauditlog_statement
+
+pgaudit.log_statement_once:
+  section: Extensions
+  extension: pgaudit
+  parameter_type: boolean
+  description: "Log the statement text and parameters only with the first entry for a statement/substatement combination, instead of with every entry."
+  default_value: "off"
+  restart_required: false
+  docs_link: https://github.com/pgaudit/pgaudit#pgauditlog_statement_once
+  recommendation: |
+    Reduces log volume for statements that produce many audit entries. Trade-off: harder to correlate later entries
+    back to the statement text — the (process id, statement id, substatement id) tuple is needed.
+
+pgaudit.role:
+  section: Extensions
+  extension: pgaudit
+  parameter_type: string
+  description: "Master role used for object-level audit logging. A relation is logged when this role (or a role granted to it) has the privilege used by the executed statement."
+  default_value: ""
+  allow_empty: true
+  restart_required: false
+  docs_link: https://github.com/pgaudit/pgaudit#pgauditrole
+  recommendation: |
+    Leave empty to disable object audit logging. To audit specific relations, create a role (e.g. `auditor`), GRANT
+    the privileges you want audited (SELECT, INSERT, etc.) on the target relations, and set this to that role name.

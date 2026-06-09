@@ -318,6 +318,15 @@ func TestValidateParameterValue(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "empty string allowed",
+			spec: PostgresParameterSpec{
+				ParameterType: ParameterTypeString,
+				AllowEmpty:    true,
+			},
+			value:   "",
+			wantErr: false,
+		},
+		{
 			name: "whitespace only string",
 			spec: PostgresParameterSpec{
 				ParameterType: ParameterTypeString,

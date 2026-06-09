@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -176,7 +177,6 @@ func parseMetricResults(results []any, queryToAgg map[string]string) ([]MetricSe
 	return series, nil
 }
 
-// extractInstanceID retrieves the pod name from series labels
 func extractInstanceID(labels *[]signoz.Querybuildertypesv5Label) string {
 	if labels == nil {
 		return ""
@@ -193,7 +193,6 @@ func extractInstanceID(labels *[]signoz.Querybuildertypesv5Label) string {
 	return ""
 }
 
-// parseMetricValues converts SigNoz points to metric values
 func parseMetricValues(points *[]signoz.Querybuildertypesv5TimeSeriesValue) []Values {
 	if points == nil {
 		return nil
@@ -410,28 +409,68 @@ func ExpandLevels(levels []string) []string {
 	return out
 }
 
-// CNPG wraps postgres CSV records as `{...,"record":{"message":"..."}}` and its own
-// lifecycle logs as `{...,"msg":"..."}`. Falls back to the original on miss.
-func unwrapCNPGBody(body string) string {
+type cnpgEnvelope struct {
+	message string
+	logger  string
+}
+
+// CNPG wraps postgres CSV records as `{...,"record":{"message":"..."}}`, pgaudit
+// records as `{...,"record":{"audit":{...}}}` (with record.message blanked), and
+// its own lifecycle logs as `{...,"msg":"..."}`. Returns the original body on miss.
+func unwrapCNPGBody(body string) cnpgEnvelope {
 	if !strings.HasPrefix(body, "{") || !strings.HasSuffix(body, "}") {
-		return body
+		return cnpgEnvelope{message: body}
 	}
 
 	var parsed map[string]any
 	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
-		return body
+		return cnpgEnvelope{message: body}
 	}
 
+	logger, _ := parsed["logger"].(string)
 	if record, ok := parsed["record"].(map[string]any); ok {
+		if audit, ok := record["audit"].(map[string]any); ok {
+			return cnpgEnvelope{message: renderPgAuditRecord(audit, body), logger: logger}
+		}
 		if msg, ok := record["message"].(string); ok && msg != "" {
-			return msg
+			return cnpgEnvelope{message: msg, logger: logger}
 		}
 	}
 	if msg, ok := parsed["msg"].(string); ok && msg != "" {
-		return msg
+		return cnpgEnvelope{message: msg, logger: logger}
 	}
 
-	return body
+	return cnpgEnvelope{message: body, logger: logger}
+}
+
+var pgauditRecordFields = []string{
+	"audit_type", "statement_id", "substatement_id", "class", "command",
+	"object_type", "object_name", "statement", "parameter",
+}
+
+// renderPgAuditRecord reconstructs pgaudit's native CSV line ("AUDIT: SESSION,1,1,...,statement,parameter")
+// from the structured envelope CNPG produces. Falls back to body on writer error.
+func renderPgAuditRecord(audit map[string]any, body string) string {
+	fields := make([]string, 0, len(pgauditRecordFields)+1)
+	for _, key := range pgauditRecordFields {
+		s, _ := audit[key].(string)
+		fields = append(fields, s)
+	}
+	if rows, _ := audit["rows"].(string); rows != "" {
+		fields = append(fields, rows)
+	}
+
+	var buf strings.Builder
+	w := csv.NewWriter(&buf)
+	if err := w.Write(fields); err != nil {
+		return body
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return body
+	}
+
+	return "AUDIT: " + strings.TrimRight(buf.String(), "\n")
 }
 
 // Returns false when the row lacks the minimum data required to render a log entry (timestamp + non-empty body).
@@ -441,11 +480,11 @@ func parseLogRow(row signoz.Querybuildertypesv5RawRow) (LogEntry, bool) {
 	}
 
 	data := *row.Data
-	message, _ := data["body"].(string)
-	if message == "" {
+	body, _ := data["body"].(string)
+	if body == "" {
 		return LogEntry{}, false
 	}
-	message = unwrapCNPGBody(message)
+	envelope := unwrapCNPGBody(body)
 
 	resources, _ := data["resources_string"].(map[string]any)
 	instanceID, _ := resources["k8s.pod.name"].(string)
@@ -453,7 +492,7 @@ func parseLogRow(row signoz.Querybuildertypesv5RawRow) (LogEntry, bool) {
 	entry := LogEntry{
 		Timestamp:  *row.Timestamp,
 		InstanceID: instanceID,
-		Message:    message,
+		Message:    envelope.message,
 	}
 	if severity, _ := data["severity_text"].(string); severity != "" {
 		// SigNoz can ingest mixed-case severities depending on collector
@@ -464,7 +503,13 @@ func parseLogRow(row signoz.Querybuildertypesv5RawRow) (LogEntry, bool) {
 		}
 	}
 	attrs, _ := data["attributes_string"].(map[string]any)
-	if process, ok := attrs["backend_type"].(string); ok && process != "" {
+	process, _ := attrs["backend_type"].(string)
+	// Pgaudit shares postgres backends but is its own audit stream — surface it as a distinct process.
+	// The collector only stamps backend_type for logger=postgres, so derive it here for pgaudit rows.
+	if envelope.logger == "pgaudit" {
+		process = "pgaudit"
+	}
+	if process != "" {
 		entry.Process = &process
 	}
 	return entry, true
@@ -486,7 +531,7 @@ func buildLogsFilterExpression(namespace string, userFilters []filter.Expr) stri
 	exprs := []filter.Expr{
 		filter.Eq("k8s.namespace.name", namespace),
 		filter.Eq("k8s.container.name", "postgres"),
-		filter.Eq("logger", "postgres"),
+		filter.MustIn("logger", []string{"postgres", "pgaudit"}),
 	}
 	exprs = append(exprs, userFilters...)
 
@@ -540,10 +585,9 @@ func buildRequestBody(start, end time.Time, queries []signoz.Querybuildertypesv5
 	}
 }
 
-// buildPodFilters returns the standard k8s pod and namespace filter expressions.
-// The pod filter is only appended when instances is non-empty; callers are
-// expected to further scope the query (e.g. via branchScopeFilter) so an empty
-// instances list does not widen the result set beyond the intended branch.
+// Pod filter is appended only when instances is non-empty; callers must
+// further scope the query (e.g. via branchScopeFilter) so an empty list does
+// not widen the result set beyond the intended branch.
 func buildPodFilters(namespace string, instances []string) []filter.Expr {
 	parts := []filter.Expr{filter.Eq("k8s.namespace.name", namespace)}
 	if len(instances) > 0 {
@@ -567,19 +611,18 @@ func decodeResults[T any](results []any) ([]T, error) {
 	return parsed, nil
 }
 
-// calculateStep determines the step interval based on the time difference between start and end.
 func calculateStep(start, end time.Time) int {
 	diff := end.Sub(start)
 	switch {
 	case diff < 24*time.Hour:
-		return int(time.Minute.Seconds()) // Less than a day, use 1 minute step
+		return int(time.Minute.Seconds())
 	case diff < 3*24*time.Hour:
-		return int((15 * time.Minute).Seconds()) // Less than 3 days, use 15 minutes step
+		return int((15 * time.Minute).Seconds())
 	case diff < 7*24*time.Hour:
-		return int((30 * time.Minute).Seconds()) // Less than a week, use 30 minutes step
+		return int((30 * time.Minute).Seconds())
 	case diff < 30*24*time.Hour:
-		return int((time.Hour).Seconds()) // Less than a month, use 1 hour step
-	default: // For longer periods, use 6 hours step
+		return int((time.Hour).Seconds())
+	default:
 		return int(6 * time.Hour.Seconds())
 	}
 }
@@ -627,6 +670,11 @@ func compileSigNozLogFilter(f LogFilter) (filter.Expr, error) {
 			return nil, fmt.Errorf("op [%s] not allowed for field [process]", f.Op)
 		}
 		return filter.In("backend_type", f.Values), nil
+	case "logger":
+		if f.Op != "in" {
+			return nil, fmt.Errorf("op [%s] not allowed for field [logger]", f.Op)
+		}
+		return filter.In("logger", f.Values), nil
 	case "body":
 		switch f.Op {
 		case "contains":

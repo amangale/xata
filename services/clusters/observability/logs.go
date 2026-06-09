@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -116,15 +117,19 @@ func (q *LogsQuerier) Query(ctx context.Context, branchID string, start, end tim
 
 	out := &LogsResult{Entries: make([]LogEntry, 0, len(rows))}
 	for _, r := range rows {
+		message, logger := unwrapCNPGBody(r.Message)
 		entry := LogEntry{
 			Timestamp:  r.Timestamp,
 			InstanceID: r.Pod,
-			Message:    unwrapCNPGBody(r.Message),
+			Message:    message,
 		}
 		if mapped, ok := severityToLevel[strings.ToUpper(r.Severity)]; ok {
 			entry.Level = mapped
 		}
-		if r.Process != "" {
+		switch {
+		case logger == "pgaudit":
+			entry.Process = "pgaudit"
+		case r.Process != "":
 			entry.Process = r.Process
 		}
 		out.Entries = append(out.Entries, entry)
@@ -156,7 +161,7 @@ func buildLogsQL(namespace, branchID string, filters []LogFilter, resumeBeforeNa
 	// which mixes its own logs (logger="instance-manager"), barman lines
 	// (logger="backup") and actual postgres records (logger="postgres").
 	// Match SigNoz behaviour and only surface the latter.
-	b.WriteString(` AND logger:="postgres"`)
+	b.WriteString(` AND logger:in ("postgres","pgaudit")`)
 	// TODO(cleanup after one month): drop the pod_name regex disjunct once
 	// VictoriaLogs retentionPeriod (30d) has aged past the branch_id
 	// rollout; rows from before then carry no branch_id field.
@@ -197,6 +202,11 @@ func compileLogFilter(f LogFilter) (string, error) {
 			return "", fmt.Errorf("op [%s] not allowed for field [process]", f.Op)
 		}
 		return inClause("backend_type", f.Values), nil
+	case "logger":
+		if f.Op != "in" {
+			return "", fmt.Errorf("op [%s] not allowed for field [logger]", f.Op)
+		}
+		return inClause("logger", f.Values), nil
 	case "body":
 		// The message lives in _msg, not body (Vector renames it on ingest).
 		switch f.Op {
@@ -230,26 +240,64 @@ func quoteLQL(v string) string {
 	return strconv.Quote(v)
 }
 
-// unwrapCNPGBody mirrors the legacy SigNoz unwrapping: CNPG wraps Postgres
-// CSV records as `{...,"record":{"message":"..."}}` and its lifecycle logs
-// as `{...,"msg":"..."}`. Falls back to the original on miss.
-func unwrapCNPGBody(body string) string {
+// CNPG wraps Postgres CSV records as `{...,"record":{"message":"..."}}`,
+// pgaudit records as `{...,"record":{"audit":{...}}}` (with record.message
+// blanked), and its lifecycle logs as `{...,"msg":"..."}`. Returns
+// (message, logger); logger is the outer envelope's `logger` field when
+// present so the caller can stamp Process from it without trusting the
+// storage layer's derived backend_type.
+func unwrapCNPGBody(body string) (string, string) {
 	if !strings.HasPrefix(body, "{") || !strings.HasSuffix(body, "}") {
-		return body
+		return body, ""
 	}
 	var parsed map[string]any
 	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
-		return body
+		return body, ""
 	}
+	logger, _ := parsed["logger"].(string)
 	if record, ok := parsed["record"].(map[string]any); ok {
+		if audit, ok := record["audit"].(map[string]any); ok {
+			return renderPgAuditRecord(audit, body), logger
+		}
 		if msg, ok := record["message"].(string); ok && msg != "" {
-			return msg
+			return msg, logger
 		}
 	}
 	if msg, ok := parsed["msg"].(string); ok && msg != "" {
-		return msg
+		return msg, logger
 	}
-	return body
+	return body, logger
+}
+
+var pgauditRecordFields = []string{
+	"audit_type", "statement_id", "substatement_id", "class", "command",
+	"object_type", "object_name", "statement", "parameter",
+}
+
+// renderPgAuditRecord reconstructs pgaudit's CSV line
+// ("AUDIT: SESSION,1,1,...,statement,parameter") from CNPG's structured envelope.
+// Falls back to body if the CSV writer fails (in practice unreachable with strings.Builder).
+func renderPgAuditRecord(audit map[string]any, body string) string {
+	fields := make([]string, 0, len(pgauditRecordFields)+1)
+	for _, key := range pgauditRecordFields {
+		s, _ := audit[key].(string)
+		fields = append(fields, s)
+	}
+	if rows, _ := audit["rows"].(string); rows != "" {
+		fields = append(fields, rows)
+	}
+
+	var buf strings.Builder
+	w := csv.NewWriter(&buf)
+	if err := w.Write(fields); err != nil {
+		return body
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return body
+	}
+
+	return "AUDIT: " + strings.TrimRight(buf.String(), "\n")
 }
 
 // encodeCursor / decodeCursor turn a timestamp into an opaque string for
