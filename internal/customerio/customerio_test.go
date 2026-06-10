@@ -2,6 +2,9 @@ package customerio
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
 	"xata/internal/customerio/mocks"
@@ -116,6 +119,83 @@ func TestNewClient(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetJSON(t *testing.T) {
+	tests := map[string]struct {
+		responses []*http.Response
+		wantErr   string
+		wantName  string
+		wantCalls int
+	}{
+		"retries rate limited response": {
+			responses: []*http.Response{
+				newAppAPIResponse(http.StatusTooManyRequests, `{"errors":[{"detail":"rate limited"}]}`, "0"),
+				newAppAPIResponse(http.StatusOK, `{"name":"ok"}`, ""),
+			},
+			wantName:  "ok",
+			wantCalls: 2,
+		},
+		"retries server errors up to limit": {
+			responses: []*http.Response{
+				newAppAPIResponse(http.StatusInternalServerError, `server error`, "0"),
+				newAppAPIResponse(http.StatusInternalServerError, `server error`, "0"),
+				newAppAPIResponse(http.StatusInternalServerError, `server error`, "0"),
+				newAppAPIResponse(http.StatusInternalServerError, `server error`, "0"),
+			},
+			wantErr:   "customer.io app api status 500",
+			wantCalls: int(appAPIMaxRetries) + 1,
+		},
+		"does not retry client errors": {
+			responses: []*http.Response{
+				newAppAPIResponse(http.StatusBadRequest, `bad request`, ""),
+			},
+			wantErr:   "customer.io app api status 400",
+			wantCalls: 1,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			doer := &responseDoer{responses: tt.responses}
+			client := &Client{httpClient: doer, apiKey: "test-api-key"}
+
+			var got struct {
+				Name string `json:"name"`
+			}
+			err := client.getJSON(context.Background(), "https://example.com", &got)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantName, got.Name)
+			require.Equal(t, tt.wantCalls, doer.calls)
+		})
+	}
+}
+
+type responseDoer struct {
+	responses []*http.Response
+	calls     int
+}
+
+func (d *responseDoer) Do(_ *http.Request) (*http.Response, error) {
+	if d.calls >= len(d.responses) {
+		return newAppAPIResponse(http.StatusInternalServerError, "unexpected request", "0"), nil
+	}
+	response := d.responses[d.calls]
+	d.calls++
+	return response, nil
+}
+
+func newAppAPIResponse(statusCode int, body string, retryAfter string) *http.Response {
+	header := http.Header{}
+	if retryAfter != "" {
+		header.Set("Retry-After", retryAfter)
+	}
+	return &http.Response{StatusCode: statusCode, Header: header, Body: io.NopCloser(strings.NewReader(body))}
 }
 
 func TestStructToMap(t *testing.T) {

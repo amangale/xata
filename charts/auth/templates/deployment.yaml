@@ -79,6 +79,10 @@ spec:
               value: "{{ .Values.dependencies.projectsGrpcUrl }}"
             - name: POSTGRES_SSLMODE
               value: {{ .Values.postgres.sslmode }}
+            - name: FRONTEND_URL
+              value: {{ .Values.config.frontendURL | quote }}
+            - name: BILLING_REQUIRED
+              value: {{ .Values.config.billingRequired | quote }}
             - name: KEYCLOAK_ADMIN_USERNAME
               valueFrom:
                 secretKeyRef:

@@ -113,6 +113,8 @@ type Client interface {
 	FetchCustomer(ctx context.Context, customerID string) (*Customer, error)
 	// FetchCustomerByExternalID retrieves a customer record by the external customer ID.
 	FetchCustomerByExternalID(ctx context.Context, externalCustomerID string) (*Customer, error)
+	// ListCustomersCreatedAfter retrieves customer records created at or after the given time.
+	ListCustomersCreatedAfter(ctx context.Context, createdAfter time.Time) ([]*Customer, error)
 	// FetchStripeCustomer retrieves a Stripe customer by their Stripe customer ID.
 	FetchStripeCustomer(ctx context.Context, stripeCustomerID string) (*StripeCustomer, error)
 	// FetchPaymentIntentPaymentMethodID retrieves the payment method attached to a Stripe payment intent.
@@ -161,6 +163,10 @@ func (n *NoopBilling) FetchCustomer(ctx context.Context, externalCustomerID stri
 }
 
 func (n *NoopBilling) FetchCustomerByExternalID(_ context.Context, _ string) (*Customer, error) {
+	return nil, nil
+}
+
+func (n *NoopBilling) ListCustomersCreatedAfter(_ context.Context, _ time.Time) ([]*Customer, error) {
 	return nil, nil
 }
 

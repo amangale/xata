@@ -17,6 +17,10 @@ postgres:
 observability:
   serviceName: auth
 
+config:
+  frontendURL: ""
+  billingRequired: false
+
 httpRoute:
   hostname: localhost
 
@@ -51,6 +55,18 @@ resourceCleanup:
   disabledForDays: 15
   maxBranches: 50
   dryRun: true
+  suspend: false
+  resources:
+    limits:
+      cpu: 100m
+      memory: 64Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+trialExpiryEmails:
+  schedule: "0 9 * * *"
+  timeZone: "Etc/UTC"
   suspend: false
   resources:
     limits:

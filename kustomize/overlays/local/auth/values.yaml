@@ -2,5 +2,9 @@ image:
   repository: xatatech/auth
   tag: latest
 
+config:
+  frontendURL: "http://localhost:3000"
+  billingRequired: false
+
 resourceCleanup:
   dryRun: false

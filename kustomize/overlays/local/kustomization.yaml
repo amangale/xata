@@ -111,16 +111,6 @@ patches:
           name: POSTGRES_HOST
           value: postgres
       - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: FRONTEND_URL
-          value: "http://localhost:3000"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: BILLING_REQUIRED
-          value: "false"
-      - op: add
         path: /spec/template/spec/initContainers/0/envFrom/-
         value:
           secretRef:

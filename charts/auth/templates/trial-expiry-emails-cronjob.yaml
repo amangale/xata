@@ -1,0 +1,89 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Chart.Name }}-trial-expiry-emails
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    description: "ServiceAccount for Trial Expiry Email Job"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Chart.Name }}-trial-expiry-emails
+  namespace: {{ .Release.Namespace }}
+spec:
+  suspend: {{ .Values.trialExpiryEmails.suspend }}
+  schedule: {{ .Values.trialExpiryEmails.schedule | quote }}
+  timeZone: {{ .Values.trialExpiryEmails.timeZone | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          serviceAccountName: {{ .Chart.Name }}-trial-expiry-emails
+          restartPolicy: Never
+          enableServiceLinks: false
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: trial-expiry-emails
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["/server"]
+              args:
+                - trial_expiry_emails
+              env:
+                - name: FRONTEND_URL
+                  value: {{ .Values.config.frontendURL | quote }}
+                - name: BILLING_REQUIRED
+                  value: {{ .Values.config.billingRequired | quote }}
+                - name: ORB_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: orb-secret
+                      key: api-key
+                      optional: true
+                - name: STRIPE_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: stripe-secret
+                      key: api-key
+                      optional: true
+                - name: CUSTOMER_IO_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: customerio
+                      key: CUSTOMER_IO_API_KEY
+                      optional: true
+                - name: CUSTOMER_IO_IS_PRODUCTION
+                  valueFrom:
+                    configMapKeyRef:
+                      name: customerio-config
+                      key: CUSTOMER_IO_IS_PRODUCTION
+                      optional: true
+                - name: SLACK_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: slack-secret
+                      key: bot-token
+                      optional: true
+              envFrom:
+                - configMapRef:
+                    name: slack-config
+                    optional: true
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 1000
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                {{- toYaml .Values.trialExpiryEmails.resources | nindent 16 }}

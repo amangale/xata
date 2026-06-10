@@ -45,3 +45,19 @@ type BillingTrialCreditDroppedNoPaymentMethodV3 struct {
 func (BillingTrialCreditDroppedNoPaymentMethodV3) TriggerName() string {
 	return "billing_trial_credit_dropped_no_payment_method_v3"
 }
+
+type BillingTrialExpiresSoonV3 struct {
+	OrganizationID         string  `json:"organization_id"`
+	OrganizationName       string  `json:"organization_name"`
+	ActiveCredits          float64 `json:"active_credits"`
+	ActiveCreditsFormatted string  `json:"active_credits_formatted"`
+	FreeTrialDays          int     `json:"free_trial_days"`
+	TrialExpiryDate        *int64  `json:"trial_expiry_date"`
+	TrialExpiryDays        *int    `json:"trial_expiry_days"`
+	BillingSettingsURL     string  `json:"billing_settings_url"`
+	ConsoleURL             string  `json:"console_url"`
+}
+
+func (BillingTrialExpiresSoonV3) TriggerName() string {
+	return "billing_trial_expires_soon_v3"
+}
