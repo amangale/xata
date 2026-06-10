@@ -7,6 +7,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// DefaultMaxRecvMsgBytes raises the per-call receive limit above gRPC's 4 MiB
+// default. Callers can override it with their own grpc.WithDefaultCallOptions.
+const DefaultMaxRecvMsgBytes = 16 * 1024 * 1024
+
 // Default retry policy for gRPC clients
 const RetryPolicy = `{
 	"methodConfig": [{
@@ -31,6 +35,7 @@ func NewClient(o *o11y.O, url string, extraOpts ...grpc.DialOption) (*ClientConn
 	logger := o.Logger()
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(DefaultMaxRecvMsgBytes)),
 		o11y.GRPCUnaryInterceptorLogs(&logger),
 		grpc.WithDefaultServiceConfig(RetryPolicy),
 	}

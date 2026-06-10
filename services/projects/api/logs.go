@@ -12,7 +12,7 @@ import (
 
 const (
 	DefaultLogLimit = 100
-	MaxLogLimit     = 1000
+	MaxLogLimit     = 200
 
 	maxLogFilters             = 16
 	maxLogFilterValueLen      = 1024

@@ -167,12 +167,69 @@ func TestLogsQuerier_DecodesEntriesAndSetsCursor(t *testing.T) {
 	require.Equal(t, t2.UnixNano(), resumeNanos, "cursor anchors at oldest entry; LQL clause is strict less-than")
 }
 
-func TestLogsQuerier_NoCursorWhenPartialPage(t *testing.T) {
-	backend := &fakeLogsBackend{rows: []LogRow{{Timestamp: time.Now(), Pod: "br-1-0", Message: "a"}}}
-	q := NewLogsQuerier(backend, "xata-clusters")
-	res, err := q.Query(context.Background(), "br-1", time.Now().Add(-time.Hour), time.Now(), nil, 100, "")
-	require.NoError(t, err)
-	require.Empty(t, res.NextCursor)
+func TestLogsQuerier_Query(t *testing.T) {
+	base := time.Date(2025, 5, 1, 12, 0, 0, 0, time.UTC)
+
+	// 1 MiB each; the 9th would exceed the 8 MiB budget.
+	budgetRows := make([]LogRow, 10)
+	for i := range budgetRows {
+		budgetRows[i] = LogRow{Timestamp: base.Add(-time.Duration(i) * time.Minute), Pod: "br-1-0", Message: strings.Repeat("x", maxLogMessageBytes)}
+	}
+
+	tests := map[string]struct {
+		rows        []LogRow
+		limit       int
+		wantEntries int
+		wantCursor  bool
+		check       func(t *testing.T, res *LogsResult)
+	}{
+		"no cursor when partial page": {
+			rows:        []LogRow{{Timestamp: base, Pod: "br-1-0", Message: "a"}},
+			limit:       100,
+			wantEntries: 1,
+			wantCursor:  false,
+		},
+		"stops on byte budget": {
+			rows:        budgetRows,
+			limit:       1000,
+			wantEntries: 8,
+			wantCursor:  true,
+			check: func(t *testing.T, res *LogsResult) {
+				resumeNanos, err := decodeCursor(res.NextCursor)
+				require.NoError(t, err)
+				require.Equal(t, res.Entries[len(res.Entries)-1].Timestamp.UnixNano(), resumeNanos)
+			},
+		},
+		"truncates oversized message": {
+			rows:        []LogRow{{Timestamp: base, Pod: "br-1-0", Message: strings.Repeat("y", maxLogMessageBytes+1024)}},
+			limit:       1000,
+			wantEntries: 1,
+			wantCursor:  false,
+			check: func(t *testing.T, res *LogsResult) {
+				require.True(t, strings.HasSuffix(res.Entries[0].Message, logTruncationMarker), "oversized message should be truncated")
+				require.LessOrEqual(t, len(res.Entries[0].Message), maxLogMessageBytes)
+			},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			backend := &fakeLogsBackend{rows: tt.rows}
+			q := NewLogsQuerier(backend, "xata-clusters")
+
+			res, err := q.Query(context.Background(), "br-1", base.Add(-time.Hour), base, nil, tt.limit, "")
+			require.NoError(t, err)
+
+			require.Len(t, res.Entries, tt.wantEntries)
+			if tt.wantCursor {
+				require.NotEmpty(t, res.NextCursor, "an early-stopped or full page must hand back a cursor")
+			} else {
+				require.Empty(t, res.NextCursor)
+			}
+			if tt.check != nil {
+				tt.check(t, res)
+			}
+		})
+	}
 }
 
 func TestUnwrapCNPGBody(t *testing.T) {

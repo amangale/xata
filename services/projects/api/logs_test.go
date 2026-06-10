@@ -169,7 +169,7 @@ func TestValidateLogsLimit(t *testing.T) {
 		wantErr bool
 	}{
 		"nil limit defaults later":  {limit: nil, wantErr: false},
-		"in-range limit":            {limit: new(500), wantErr: false},
+		"in-range limit":            {limit: new(150), wantErr: false},
 		"max limit allowed":         {limit: new(MaxLogLimit), wantErr: false},
 		"zero is rejected":          {limit: new(0), wantErr: true},
 		"negative is rejected":      {limit: new(-1), wantErr: true},

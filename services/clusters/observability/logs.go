@@ -9,6 +9,19 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"xata/internal/grpc/pagination"
+)
+
+const (
+	// maxLogPageBytes bounds a page by message bytes, kept under the gRPC
+	// receive cap; the rest is paginated.
+	maxLogPageBytes = 8 * 1024 * 1024
+	// maxLogMessageBytes mirrors VictoriaLogs' per-line cap (insert.maxLineSizeBytes
+	// in cell-observability), so this only bites if that upstream cap changes.
+	maxLogMessageBytes = 1024 * 1024
+
+	logTruncationMarker = "… [truncated]"
 )
 
 // LogFilter mirrors the user-facing filter shape passed across the gRPC
@@ -115,8 +128,14 @@ func (q *LogsQuerier) Query(ctx context.Context, branchID string, start, end tim
 	}
 
 	out := &LogsResult{Entries: make([]LogEntry, 0, len(rows))}
+	page := pagination.New(maxLogPageBytes)
 	for _, r := range rows {
 		message, logger := unwrapCNPGBody(r.Message)
+		message = pagination.Truncate(message, logTruncationMarker, maxLogMessageBytes)
+		if !page.Add(len(message)) {
+			break
+		}
+
 		entry := LogEntry{
 			Timestamp:  r.Timestamp,
 			InstanceID: r.Pod,
@@ -134,10 +153,9 @@ func (q *LogsQuerier) Query(ctx context.Context, branchID string, start, end tim
 		out.Entries = append(out.Entries, entry)
 	}
 
-	// VictoriaLogs returns rows ordered by _time DESC; when the page is full
-	// there may be older matching entries. Cursor the next page off the
-	// oldest returned timestamp.
-	if len(out.Entries) >= limit && len(out.Entries) > 0 {
+	// Rows are _time DESC; cursor off the oldest returned entry when more
+	// remain — either we hit the byte budget or the backend filled the limit.
+	if len(out.Entries) > 0 && (page.Stopped() || len(rows) >= limit) {
 		out.NextCursor = encodeCursor(out.Entries[len(out.Entries)-1].Timestamp)
 	}
 	return out, nil
