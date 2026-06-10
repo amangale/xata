@@ -99,6 +99,9 @@ func createOrganization(ctx context.Context, client *gocloak.GoCloak, token, key
 		SetBody(organization{
 			Name:    orgName,
 			Enabled: true,
+			Attributes: map[string][]string{
+				"usageTier": {"t2"},
+			},
 		}).
 		Post(orgsURL)
 	if err != nil {
@@ -155,7 +158,8 @@ func createOrganization(ctx context.Context, client *gocloak.GoCloak, token, key
 }
 
 type organization struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Enabled bool   `json:"enabled"`
+	ID         string              `json:"id"`
+	Name       string              `json:"name"`
+	Enabled    bool                `json:"enabled"`
+	Attributes map[string][]string `json:"attributes,omitempty"`
 }

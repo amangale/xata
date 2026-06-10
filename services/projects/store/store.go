@@ -8,11 +8,17 @@ import (
 )
 
 const (
-	MaxBranchesPerProject             = 100
-	MaxBranchesPerProjectWithXatastor = 1000
-	MaxNewOrgBranches                 = 10
-	DefaultRegion                     = "us-east-1"
-	BackupTypeContinuous              = "continuous"
+	MaxBranchesPerProject = 100
+	MaxNewOrgBranches     = 10
+	DefaultRegion         = "us-east-1"
+	BackupTypeContinuous  = "continuous"
+
+	// XatastorMaxBranchesPerOrg is the MaxBranchesPerOrg default for T2 orgs with UseXatastor enabled (10× T2).
+	XatastorMaxBranchesPerOrg = 10000
+	// XatastorMaxBranchesPerProject is the MaxBranchesPerProject default for T2 orgs with UseXatastor enabled (10× T2).
+	XatastorMaxBranchesPerProject = 1000
+	// XatastorMaxBranchesPerHour is the MaxBranchesPerHour default for T2 orgs with UseXatastor enabled (10× T2).
+	XatastorMaxBranchesPerHour = 500
 )
 
 // UsageTier identifies the usage tier of an organization.
@@ -28,11 +34,11 @@ const (
 var tierDefaults = map[UsageTier]map[LimitKey]int{
 	TierT1: {
 		LimitMaxDescriptionLength:   50,
-		LimitMaxBranchesPerProject:  10,
-		LimitMaxBranchesPerOrg:      10,
+		LimitMaxBranchesPerProject:  200,
+		LimitMaxBranchesPerOrg:      200,
 		LimitMaxInstancesPerBranch:  5,
 		LimitMinInstancesPerBranch:  1,
-		LimitMaxBranchesPerHour:     10,
+		LimitMaxBranchesPerHour:     100,
 		LimitMaxProjects:            10,
 		LimitMaxProjectsPerHour:     5,
 		LimitMaxAllowedInstanceType: 2000,
@@ -71,6 +77,31 @@ func TierDefaultInt(tier UsageTier, key LimitKey, fallback int) int {
 		}
 	}
 	return fallback
+}
+
+// OrgLimits holds resolved branch-count limits for an organization.
+// All fields are concrete values — 0 is not used as a sentinel for "unlimited".
+// When set on CreateBranchConfiguration the store skips the GetOrgLimits DB call.
+type OrgLimits struct {
+	MaxBranchesPerOrg     int
+	MaxBranchesPerProject int
+	MaxBranchesPerHour    int
+}
+
+// ResolveIntLimit returns the DB override for key if present and valid, otherwise returns def.
+// A limit value of 0 means "no limit" — callers should skip enforcement when this returns 0.
+func ResolveIntLimit(overrides map[LimitKey]any, key LimitKey, def int) int {
+	v, ok := overrides[key]
+	if !ok {
+		return def
+	}
+	type numberer interface{ Int64() (int64, error) }
+	if n, ok := v.(numberer); ok {
+		if i, err := n.Int64(); err == nil {
+			return int(i)
+		}
+	}
+	return def
 }
 
 // LimitKey identifies a project-level limit stored in the projects service.
@@ -120,6 +151,7 @@ type CreateProjectConfiguration struct {
 	Name        string             `json:"name"`
 	ScaleToZero ProjectScaleToZero `json:"scaleToZero"`
 	IPFiltering IPFiltering        `json:"ipFiltering"`
+	UsageTier   string
 }
 
 type ProjectScaleToZero struct {
@@ -235,6 +267,9 @@ type CreateBranchConfiguration struct {
 	BackupRetentionPeriod int `json:"backupRetentionPeriod"`
 	// BackupsEnabled indicates whether backups should be created for this branch
 	BackupsEnabled bool `json:"backupsEnabled"`
+	UsageTier      string
+	// Limits are pre-resolved org limits. When non-nil the store skips GetOrgLimits.
+	Limits *OrgLimits
 }
 
 type InstanceType struct {
@@ -387,9 +422,6 @@ type ProjectsStore interface {
 
 	// CountOrganizationBranches counts all branches ever created for an organization (including soft-deleted ones)
 	CountOrganizationBranches(ctx context.Context, organizationID string) (int64, error)
-
-	// CountActiveOrgBranches counts active (non-deleted) branches across all projects in an organization.
-	CountActiveOrgBranches(ctx context.Context, organizationID string) (int64, error)
 
 	// CountActiveProjectBranches counts active (non-deleted) branches in a project.
 	CountActiveProjectBranches(ctx context.Context, projectID string) (int64, error)

@@ -1333,7 +1333,6 @@ func TestSoftDeleteBehavior(t *testing.T) {
 		sqlStore := setupSQLStore(ctx, t, maxDepth, maxChildren)
 		createRegionAndCell(t, sqlStore, "region", "cell")
 		orgID := "softDeleteOrg"
-
 		project, cleanup := createProjectAndBranchesForLimitTest(t, ctx, sqlStore, orgID, "branchLimitProject2")
 		defer cleanup()
 

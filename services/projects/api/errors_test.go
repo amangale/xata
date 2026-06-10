@@ -109,7 +109,7 @@ func TestIsDescriptionValid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := IsBranchDescriptionValid(tt.description)
+			got := IsBranchDescriptionValid(&tt.description, MaxBranchDescriptionLength)
 			if tt.wantError == true {
 				assert.Error(t, got)
 				assert.Equal(t, tt.errorMessage, got.Error())

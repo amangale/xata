@@ -22,6 +22,7 @@ httpRoute:
     namespace: ""
   pathPatterns:
     - "^/organizations/([^/]+)/projects(.*)"
+    - "^/organizations/([^/]+)/limits"
     - "^/organizations/([^/]+)/regions"
     - "^/organizations/([^/]+)/instanceTypes"
     - "^/organizations/([^/]+)/credentials"

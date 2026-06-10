@@ -136,7 +136,7 @@ func storeToAPIScaleToZeroConfig(scaleToZero store.ScaleToZero) spec.ScaleToZero
 	}
 }
 
-func apiToStoreCreateProjectConfig(req spec.CreateProjectJSONBody) *store.CreateProjectConfiguration {
+func apiToStoreCreateProjectConfig(req spec.CreateProjectJSONBody, usageTier string) *store.CreateProjectConfiguration {
 	projectScaleToZeroConfig := defaultProjectScaleToZeroConfig()
 	if req.Configuration != nil {
 		projectScaleToZeroConfig = store.ProjectScaleToZero{
@@ -157,6 +157,7 @@ func apiToStoreCreateProjectConfig(req spec.CreateProjectJSONBody) *store.Create
 		Name:        req.Name,
 		ScaleToZero: projectScaleToZeroConfig,
 		IPFiltering: ipFiltering,
+		UsageTier:   usageTier,
 	}
 }
 

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -122,8 +121,8 @@ func TestCreateProject(t *testing.T) {
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	// Test create a project
-	mockStore.EXPECT().CreateProject(mock.Anything, apitest.TestOrganization, createProjectConfig("test", nil)).Return(&project, nil)
-	mockAnalytics.EXPECT().Track(mock.Anything, events.NewProjectCreatedEvent(apitest.TestOrganization, project.ID)).Return()
+	mockStore.EXPECT().CreateProject(mock.Anything, apitest.TestOrganization, createProjectConfig("test", nil)).Return(&project, nil).Once()
+	mockAnalytics.EXPECT().Track(mock.Anything, events.NewProjectCreatedEvent(apitest.TestOrganization, project.ID)).Return().Once()
 
 	c, rec := e.POST("/organizations/" + apitest.TestOrganization + "/projects").WithJSONBody(map[string]string{"name": "test"}).Context()
 	err := handler.CreateProject(c, apitest.TestOrganization)
@@ -176,7 +175,8 @@ func TestCreateProject(t *testing.T) {
 			Enabled:          true,
 			InactivityPeriod: store.InactivityPeriod(25 * time.Minute),
 		},
-	})).Return(&customProject, nil)
+	})).Return(&customProject, nil).Once()
+	mockAnalytics.EXPECT().Track(mock.Anything, events.NewProjectCreatedEvent(apitest.TestOrganization, customProject.ID)).Return().Once()
 
 	c, rec = e.POST("/organizations/" + apitest.TestOrganization + "/projects").WithJSONBody(map[string]any{
 		"name": "customProject",
@@ -206,6 +206,22 @@ func TestCreateProject(t *testing.T) {
 	assert.Equal(t, int(customProject.ScaleToZero.BaseBranches.InactivityPeriod.Duration().Minutes()), gotProject.Configuration.ScaleToZero.BaseBranches.InactivityPeriodMinutes)
 	assert.Equal(t, customProject.ScaleToZero.ChildBranches.Enabled, gotProject.Configuration.ScaleToZero.ChildBranches.Enabled)
 	assert.Equal(t, int(customProject.ScaleToZero.ChildBranches.InactivityPeriod.Duration().Minutes()), gotProject.Configuration.ScaleToZero.ChildBranches.InactivityPeriodMinutes)
+
+	// Test org project count limit exceeded — enforcement is now in the store
+	wantProjectLimitErr := store.ErrOrgProjectLimitExceeded{OrganizationID: apitest.TestOrganization, Limit: store.TierDefaultInt(store.TierT2, store.LimitMaxProjects, 0)}
+	mockStore.EXPECT().CreateProject(mock.Anything, apitest.TestOrganization, mock.Anything).Return(nil, wantProjectLimitErr).Once()
+
+	c, _ = e.POST("/organizations/" + apitest.TestOrganization + "/projects").WithJSONBody(map[string]string{"name": "test"}).Context()
+	err = handler.CreateProject(c, apitest.TestOrganization)
+	assert.Equal(t, wantProjectLimitErr, err)
+
+	// Test org hourly project rate limit exceeded
+	wantRateLimitErr := store.ErrProjectRateLimitExceeded{OrganizationID: apitest.TestOrganization, Limit: store.TierDefaultInt(store.TierT2, store.LimitMaxProjectsPerHour, 0)}
+	mockStore.EXPECT().CreateProject(mock.Anything, apitest.TestOrganization, mock.Anything).Return(nil, wantRateLimitErr).Once()
+
+	c, _ = e.POST("/organizations/" + apitest.TestOrganization + "/projects").WithJSONBody(map[string]string{"name": "test"}).Context()
+	err = handler.CreateProject(c, apitest.TestOrganization)
+	assert.Equal(t, wantRateLimitErr, err)
 
 	mockStore.AssertExpectations(t)
 }
@@ -643,6 +659,7 @@ func TestCreateBranch(t *testing.T) {
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 	mockAnalytics := analyticsmocks.NewClient(t)
+	mockStore.EXPECT().GetOrgLimits(mock.Anything, mock.Anything, mock.Anything).Return(map[store.LimitKey]any{}, nil).Maybe()
 	handler := NewAPIHandler(feat, mockStore, mockCells, "", nil, sched, mockAnalytics, mockPostgresConfig, mockImageProvider)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
@@ -951,7 +968,8 @@ func TestCreateBranch(t *testing.T) {
 				mockImageProvider.EXPECT().BuildImageURL("postgres:17.5").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5").Once()
 				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", *childBranch.ParentID).Return(&branch, nil).Once()
 				mockStore.EXPECT().GetPrimaryCell(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Cell{ID: "cell_id", RegionID: "region-id-1", Primary: true}, nil).Once()
-				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Twice()
+				// Child branches don't call prepareCreateClusterFromConfiguration, so GetRegion is only called once (in getConnectionString).
+				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: childBranch.ID, Username: "app"}).
 					Return(&clustersv1.GetPostgresClusterCredentialsResponse{Username: "user", Password: "pass"}, nil).Once()
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything,
@@ -1131,56 +1149,14 @@ func TestCreateBranch(t *testing.T) {
 			expectedError: fmt.Errorf("some cluster error"),
 		},
 		{
-			name:      "create a branch fails with error invalid config replicas",
-			projectID: "project_id",
-			jsonBody:  map[string]any{"name": branch.Name, "mode": "custom", "configuration": map[string]any{"image": configuration.Image, "replicas": configuration.Replicas + 7, "storage": configuration.Storage, "region": configuration.Region, "instanceType": configuration.InstanceType}, "backupConfiguration": map[string]any{"retentionPeriod": 2, "backupTime": "2:23:23"}},
-			setupMocks: func(capturedRequest **clustersv1.CreatePostgresClusterRequest) {
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.5"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.5").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5").Once()
-				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(branch.Name, nil, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch) error) {
-					err := provisionFn(&branch)
-					assert.Error(t, err)
-				}).Return(nil, clusters.ClusterInvalidParameter(branch.ID, "Number of instances", strconv.FormatInt(int64(configuration.Replicas+1+7), 10), fmt.Sprintf("Min: %d and Max: %d", DefaultMinInstances, DefaultMaxInstances))).Once()
-				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1", Primary: true}}, nil).Once()
-				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
-				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
-				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
-					"max_connections": "50",
-					"shared_buffers":  "256MB",
-					"work_mem":        "2259kB",
-				}, nil).Once()
-				mockPostgresConfig.EXPECT().GetDefaultPreloadLibraries(mock.AnythingOfType("string")).Return([]string{"pg_stat_statements", "auto_explain"}, nil).Once()
-				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything,
-					&clustersv1.CreatePostgresClusterRequest{
-						Id:       branch.ID,
-						ParentId: nil,
-						Configuration: &clustersv1.ClusterConfiguration{
-							NumInstances: configuration.Replicas + 1 + 7,
-							ImageName:    "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
-							VcpuRequest:  "250m",
-							VcpuLimit:    "2",
-							Memory:       "1Gi",
-							ScaleToZero:  defaultClustersScaleToZero(),
-							PostgresConfigurationParameters: map[string]string{
-								"max_connections": "50",
-								"shared_buffers":  "256MB",
-								"work_mem":        "2259kB",
-							},
-							PreloadLibraries: []string{"pg_stat_statements", "auto_explain"},
-						},
-						BackupConfiguration: &clustersv1.BackupConfiguration{
-							BackupSchedule:  "0 23 23 * * 2",
-							BackupRetention: "2d",
-							BackupsEnabled:  true,
-							BackupMethod:    BackupMethodBarman,
-						},
-						OrganizationId: apitest.TestOrganization,
-						ProjectId:      "project_id",
-					}).Return(nil, clusters.ClusterInvalidParameter(branch.ID, "Number of instances", fmt.Sprintf("%dGi", configuration.Storage), fmt.Sprintf("Max: %d", DefaultMaxInstances))).Once()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
-			},
+			// replicas=7 → numInstances=8, which exceeds MaxInstancesPerBranch (5 for T2),
+			// caught by org-limit validation before reaching the cluster service.
+			name:          "create a branch fails with error invalid config replicas",
+			projectID:     "project_id",
+			jsonBody:      map[string]any{"name": branch.Name, "mode": "custom", "configuration": map[string]any{"image": configuration.Image, "replicas": configuration.Replicas + 7, "storage": configuration.Storage, "region": configuration.Region, "instanceType": configuration.InstanceType}, "backupConfiguration": map[string]any{"retentionPeriod": 2, "backupTime": "2:23:23"}},
+			setupMocks:    func(capturedRequest **clustersv1.CreatePostgresClusterRequest) {},
 			wantError:     true,
-			expectedError: ErrorInvalidParam{BranchName: branch.Name, Param: "configuration", Message: fmt.Sprintf("cluster [%s] invalid parameter: %s has value %s and error is %s", branch.ID, "Number of instances", strconv.FormatInt(int64(configuration.Replicas+1+7), 10), fmt.Sprintf("Min: %d and Max: %d", DefaultMinInstances, DefaultMaxInstances))},
+			expectedError: ErrorInvalidParam{BranchName: branch.Name, Param: "configuration", Message: fmt.Sprintf("number of replicas exceeds the maximum of %d instance(s)", DefaultMaxInstances)},
 		},
 		{
 			name:      "create a branch with no mode param fails",
@@ -1229,7 +1205,7 @@ func TestCreateBranch(t *testing.T) {
 			expectedError: ErrorInvalidParam{
 				BranchName: branch.Name,
 				Param:      "configuration",
-				Message:    "number of replicas must be at least zero",
+				Message:    "number of replicas requires at least 1 instance(s)",
 			},
 		},
 		{
@@ -1279,7 +1255,8 @@ func TestCreateBranch(t *testing.T) {
 						OrganizationId: apitest.TestOrganization,
 						ProjectId:      "project_id",
 					}).Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
-				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
+				// Called twice: once in prepareCreateClusterFromConfiguration (backup check), once in getConnectionString.
+				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Twice()
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{
 					Id:       branch.ID,
 					Username: "app",
@@ -1805,7 +1782,6 @@ func TestCreateBranch(t *testing.T) {
 				tt.setupMocks(&capturedRequest)
 			}
 			mockStore.EXPECT().AcquireProjectLock(mock.Anything, "project_id").Return(func() error { return nil }, nil).Maybe()
-			mockStore.EXPECT().CountActiveProjectBranches(mock.Anything, "project_id").Return(0, nil).Maybe()
 
 			c, rec := e.POST("/organizations/" + apitest.TestOrganization + "/projects/project_id/branches").WithJSONBody(tt.jsonBody).Context()
 			err := handler.CreateBranch(c, apitest.TestOrganization, "project_id")
@@ -2182,7 +2158,7 @@ func TestRestoreFromBackup(t *testing.T) {
 
 			tt.setupMocks(mockStore, mockClusters, mockPostgresConfig, mockImageProvider)
 			mockStore.EXPECT().AcquireProjectLock(mock.Anything, "project_id").Return(func() error { return nil }, nil).Maybe()
-			mockStore.EXPECT().CountActiveProjectBranches(mock.Anything, "project_id").Return(0, nil).Maybe()
+			mockStore.EXPECT().GetOrgLimits(mock.Anything, mock.Anything, mock.Anything).Return(map[store.LimitKey]any{}, nil).Maybe()
 
 			var body map[string]any
 			if tt.body != nil {
@@ -4064,6 +4040,7 @@ func TestUpdateBranch(t *testing.T) {
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 	mockAnalytics := analyticsmocks.NewClient(t)
 	mockAnalytics.EXPECT().Track(mock.Anything, mock.Anything).Return().Maybe()
+	mockStore.EXPECT().GetOrgLimits(mock.Anything, mock.Anything, mock.Anything).Return(map[store.LimitKey]any{}, nil).Maybe()
 	handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", nil, sched, mockAnalytics, mockPostgresConfig, mockImageProvider)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
@@ -4316,12 +4293,12 @@ func TestUpdateBranch(t *testing.T) {
 				mockStore.EXPECT().UpdateBranch(mock.Anything, apitest.TestOrganization, "project_id", "123", updateBranchConfig(nil, nil), mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchID string, cfg *store.UpdateBranchConfiguration, provisionFn func(*store.Branch) error) {
 					err := provisionFn(&branch)
 					assert.Error(t, err)
-					assert.Equal(t, err, ErrorInvalidParam{BranchName: "123", Param: "configuration", Message: fmt.Sprintf("branch [%s]: unknown instance type %s", "123", "unknown")})
-				}).Return(nil, ErrorInvalidParam{BranchName: "123", Param: "configuration", Message: fmt.Sprintf("branch [%s]: unknown instance type %s", "123", "unknown")}).Once()
+					assert.Equal(t, err, ErrorInvalidParam{BranchName: "123", Param: "configuration", Message: fmt.Sprintf("branch [%s]: instance type %s is not found", "123", "unknown")})
+				}).Return(nil, ErrorInvalidParam{BranchName: "123", Param: "configuration", Message: fmt.Sprintf("branch [%s]: instance type %s is not found", "123", "unknown")}).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.medium", VCPUsRequest: 1000, VCPUsLimit: 2000, RAM: 4}}, nil).Once()
 			},
 			wantError:     true,
-			expectedError: ErrorInvalidParam{BranchName: "123", Param: "configuration", Message: fmt.Sprintf("branch [%s]: unknown instance type %s", "123", "unknown")},
+			expectedError: ErrorInvalidParam{BranchName: "123", Param: "configuration", Message: fmt.Sprintf("branch [%s]: instance type %s is not found", "123", "unknown")},
 		},
 		{
 			name:          "update branch with replicas less than 0 fails",
@@ -4330,7 +4307,7 @@ func TestUpdateBranch(t *testing.T) {
 			jsonBody:      map[string]int32{"replicas": -1},
 			setupMocks:    func() {},
 			wantError:     true,
-			expectedError: ErrorInvalidParam{BranchName: "123", Param: "configuration", Message: fmt.Sprintf("branch [%s]: cannot set number of replicas to less than 0", "123")},
+			expectedError: ErrorInvalidParam{BranchName: "123", Param: "configuration", Message: fmt.Sprintf("number of replicas requires at least %d instance(s)", DefaultMinInstances)},
 		},
 		{
 			name:      "update branch configuration storage works",
@@ -4591,34 +4568,15 @@ func TestUpdateBranch(t *testing.T) {
 			expectedError: ErrorBranchNotFound{BranchID: "123"},
 		},
 		{
-			name:      "update branch with replicas >5 fails",
-			projectID: "project_id",
-			branchID:  "123",
-			jsonBody:  map[string]int32{"replicas": 7},
-			setupMocks: func() {
-				branch := store.Branch{
-					ID:          "123",
-					Name:        "newTest",
-					Description: new("newDesc"),
-					Region:      "region-id-1",
-				}
-				mockStore.EXPECT().UpdateBranch(mock.Anything, apitest.TestOrganization, "project_id", "123", updateBranchConfig(nil, nil), mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchID string, cfg *store.UpdateBranchConfiguration, provisionFn func(*store.Branch) error) {
-					err := provisionFn(&branch)
-					assert.Error(t, err)
-				}).Return(nil, ErrorInvalidParam{
-					BranchName: "123",
-					Param:      "configuration",
-					Message:    "cluster [123] invalid parameter: Number of instances has value 7 and error is Min: 1 and Max: 5",
-				}).Once()
-				mockClusters.EXPECT().UpdatePostgresCluster(mock.Anything, &clustersv1.UpdatePostgresClusterRequest{
-					Id: "123",
-					UpdateConfiguration: &clustersv1.UpdateClusterConfiguration{
-						NumInstances: new(int32(8)),
-					},
-				}).Return(nil, clusters.ClusterInvalidParameter("123", "Number of instances", "7", "Min:1 and Max: 5")).Once()
-			},
+			// replicas=7 → numInstances=8, exceeds MaxInstancesPerBranch (5 for T2),
+			// caught by org-limit validation before reaching the store.
+			name:          "update branch with replicas >5 fails",
+			projectID:     "project_id",
+			branchID:      "123",
+			jsonBody:      map[string]int32{"replicas": 7},
+			setupMocks:    func() {},
 			wantError:     true,
-			expectedError: ErrorInvalidParam{BranchName: "123", Param: "configuration", Message: "cluster [123] invalid parameter: Number of instances has value 7 and error is Min: 1 and Max: 5"},
+			expectedError: ErrorInvalidParam{BranchName: "123", Param: "configuration", Message: fmt.Sprintf("number of replicas exceeds the maximum of %d instance(s)", DefaultMaxInstances)},
 		},
 		{
 			name:      "update branch instance type with custom PostgreSQL parameters adjusts values correctly",
@@ -5529,6 +5487,7 @@ func TestHandler_GetOrganizationLimits(t *testing.T) {
 	tests := map[string]struct {
 		claims    token.Claims
 		overrides map[store.LimitKey]any
+		featFlags map[openfeature.FeatureFlag]bool
 		want      spec.OrganizationLimits
 	}{
 		"t1 returns tier defaults, no db lookup": {
@@ -5578,12 +5537,28 @@ func TestHandler_GetOrganizationLimits(t *testing.T) {
 				MaxAllowedInstanceType: store.TierDefaultInt(store.TierT2, store.LimitMaxAllowedInstanceType, 0),
 			},
 		},
+		"t2 with xatastor flag uses xatastor defaults for branch counts": {
+			claims:    apitest.TestClaims,
+			overrides: map[store.LimitKey]any{},
+			featFlags: map[openfeature.FeatureFlag]bool{flags.UseXatastor: true},
+			want: spec.OrganizationLimits{
+				MaxProjects:            store.TierDefaultInt(store.TierT2, store.LimitMaxProjects, 0),
+				MaxProjectsPerHour:     store.TierDefaultInt(store.TierT2, store.LimitMaxProjectsPerHour, 0),
+				MaxBranchesPerProject:  store.XatastorMaxBranchesPerProject,
+				MaxBranchesPerOrg:      store.XatastorMaxBranchesPerOrg,
+				MaxInstancesPerBranch:  store.TierDefaultInt(store.TierT2, store.LimitMaxInstancesPerBranch, 0),
+				MinInstancesPerBranch:  store.TierDefaultInt(store.TierT2, store.LimitMinInstancesPerBranch, 0),
+				MaxBranchesPerHour:     store.XatastorMaxBranchesPerHour,
+				MaxDescriptionLength:   store.TierDefaultInt(store.TierT2, store.LimitMaxDescriptionLength, 0),
+				MaxAllowedInstanceType: store.TierDefaultInt(store.TierT2, store.LimitMaxAllowedInstanceType, 0),
+			},
+		},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			mockStore := mocks.NewProjectsStore(t)
 			mockImageProvider := postgresversionsmocks.NewImageProvider(t)
-			feat := openfeaturetest.NewClient(nil)
+			feat := openfeaturetest.NewClient(tc.featFlags)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 			h := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, mockImageProvider)
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(tc.claims)

@@ -24,6 +24,7 @@ func createProjectConfig(name string, scaleToZero *store.ProjectScaleToZero) *st
 	cfg := &store.CreateProjectConfiguration{
 		Name:        name,
 		ScaleToZero: defaultProjectScaleToZeroConfig(),
+		UsageTier:   string(store.TierT2),
 	}
 	if scaleToZero != nil {
 		cfg.ScaleToZero = *scaleToZero
@@ -45,6 +46,12 @@ func createBranchConfig(name string, parentID, description *string) *store.Creat
 		Description:           description,
 		BackupRetentionPeriod: 2,
 		BackupsEnabled:        true,
+		UsageTier:             string(store.TierT2),
+		Limits: &store.OrgLimits{
+			MaxBranchesPerOrg:     10000,
+			MaxBranchesPerProject: store.TierDefaultInt(store.TierT2, store.LimitMaxBranchesPerProject, 0),
+			MaxBranchesPerHour:    10000,
+		},
 	}
 }
 

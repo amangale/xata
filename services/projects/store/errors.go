@@ -147,15 +147,68 @@ func (e ErrProjectNotEmpty) StatusCode() int {
 
 // ErrTooManyBranches is returned when trying to create a branch for a project that reaches its limit
 type ErrTooManyBranches struct {
-	ID string
+	ID    string
+	Limit int
 }
 
 func (e ErrTooManyBranches) Error() string {
-	return fmt.Sprintf("project [%s] has too many branches", e.ID)
+	return fmt.Sprintf("project [%s] has reached the limit of %d branches", e.ID, e.Limit)
 }
 
 func (e ErrTooManyBranches) StatusCode() int {
 	return http.StatusBadRequest
+}
+
+type ErrOrgBranchLimitExceeded struct {
+	OrganizationID string
+	Limit          int
+}
+
+func (e ErrOrgBranchLimitExceeded) Error() string {
+	return fmt.Sprintf("organization [%s] has reached the limit of %d branches", e.OrganizationID, e.Limit)
+}
+
+func (e ErrOrgBranchLimitExceeded) StatusCode() int {
+	return http.StatusForbidden
+}
+
+type ErrOrgProjectLimitExceeded struct {
+	OrganizationID string
+	Limit          int
+}
+
+func (e ErrOrgProjectLimitExceeded) Error() string {
+	return fmt.Sprintf("organization [%s] has reached the limit of %d projects", e.OrganizationID, e.Limit)
+}
+
+func (e ErrOrgProjectLimitExceeded) StatusCode() int {
+	return http.StatusForbidden
+}
+
+type ErrBranchRateLimitExceeded struct {
+	OrganizationID string
+	Limit          int
+}
+
+func (e ErrBranchRateLimitExceeded) Error() string {
+	return fmt.Sprintf("organization [%s] has reached the limit of %d branch creations per hour", e.OrganizationID, e.Limit)
+}
+
+func (e ErrBranchRateLimitExceeded) StatusCode() int {
+	return http.StatusTooManyRequests
+}
+
+type ErrProjectRateLimitExceeded struct {
+	OrganizationID string
+	Limit          int
+}
+
+func (e ErrProjectRateLimitExceeded) Error() string {
+	return fmt.Sprintf("organization [%s] has reached the limit of %d project creations per hour", e.OrganizationID, e.Limit)
+}
+
+func (e ErrProjectRateLimitExceeded) StatusCode() int {
+	return http.StatusTooManyRequests
 }
 
 type ErrMaxDepthExceeded struct {

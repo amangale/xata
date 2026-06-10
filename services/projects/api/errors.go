@@ -28,16 +28,19 @@ func (e ErrorInvalidDescription) StatusCode() int {
 	return http.StatusBadRequest
 }
 
-func IsBranchDescriptionValid(e string) error {
-	if len(e) > MaxBranchDescriptionLength {
+func IsBranchDescriptionValid(e *string, maxLen int) error {
+	if e == nil {
+		return nil
+	}
+	if len(*e) > maxLen {
 		return xvalidator.ErrorMaxLength{
-			Limit: MaxBranchDescriptionLength,
+			Limit: maxLen,
 		}
 	}
-	if !validBranchDescriptionRegex.MatchString(e) {
+	if !validBranchDescriptionRegex.MatchString(*e) {
 		return ErrorInvalidDescription{
-			Description: e,
-			Message:     fmt.Sprintf("invalid branch description %s", e),
+			Description: *e,
+			Message:     fmt.Sprintf("invalid branch description %s", *e),
 		}
 	}
 	return nil

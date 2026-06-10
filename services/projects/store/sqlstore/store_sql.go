@@ -301,6 +301,10 @@ func (s *sqlProjectStore) DeleteCell(ctx context.Context, cellID string) error {
 }
 
 func (s *sqlProjectStore) CreateProject(ctx context.Context, organizationID string, config *store.CreateProjectConfiguration) (*store.Project, error) {
+	if err := s.enforceProjectCreationLimits(ctx, organizationID, config.UsageTier); err != nil {
+		return nil, err
+	}
+
 	if config.Name == "" {
 		return nil, store.ErrInvalidProjectName{Name: config.Name}
 	}
@@ -696,6 +700,13 @@ func (s *sqlProjectStore) ListBranches(ctx context.Context, organizationID strin
 }
 
 func (s *sqlProjectStore) CreateBranch(ctx context.Context, organizationID, projectID, cellID string, config *store.CreateBranchConfiguration, provisionFn func(b *store.Branch) error) (*store.Branch, error) {
+	if config.Limits == nil {
+		return nil, fmt.Errorf("internal error: branch creation limits not resolved")
+	}
+	if err := s.enforceBranchCreationLimits(ctx, organizationID, projectID, *config.Limits); err != nil {
+		return nil, err
+	}
+
 	tx, err := s.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -1221,6 +1232,41 @@ func (s *sqlProjectStore) CountActiveOrgBranches(ctx context.Context, organizati
 	return count, nil
 }
 
+func (s *sqlProjectStore) CountActiveOrgProjects(ctx context.Context, organizationID string) (int64, error) {
+	var count int64
+	err := s.sql.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM projects WHERE organization_id = $1 AND status = $2`,
+		organizationID, StatusActive).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count active org projects: %w", err)
+	}
+	return count, nil
+}
+
+func (s *sqlProjectStore) CountBranchesCreatedInLastHour(ctx context.Context, organizationID string) (int64, error) {
+	var count int64
+	err := s.sql.QueryRowContext(ctx,
+		`SELECT COUNT(b.id) FROM branches b
+		 INNER JOIN projects p ON b.project_id = p.id
+		 WHERE p.organization_id = $1 AND b.created_at > NOW() - INTERVAL '1 hour'`,
+		organizationID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count branches created in last hour: %w", err)
+	}
+	return count, nil
+}
+
+func (s *sqlProjectStore) CountProjectsCreatedInLastHour(ctx context.Context, organizationID string) (int64, error) {
+	var count int64
+	err := s.sql.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM projects WHERE organization_id = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
+		organizationID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count projects created in last hour: %w", err)
+	}
+	return count, nil
+}
+
 // AcquireProjectLock acquires a PostgreSQL advisory lock for the given projectID.
 // Uses hashtextextended() to convert projectID string to a bigint for the advisory lock key,
 // avoiding the collision risk of the 32-bit hashtext().
@@ -1245,6 +1291,63 @@ func (s *sqlProjectStore) AcquireProjectLock(ctx context.Context, projectID stri
 	}
 
 	return release, nil
+}
+
+func (s *sqlProjectStore) enforceProjectCreationLimits(ctx context.Context, organizationID, usageTier string) error {
+	tier, _ := store.ParseUsageTier(usageTier)
+	var overrides map[store.LimitKey]any
+	// We don't allow overrides for T1 organizations
+	if tier != store.TierT1 {
+		var err error
+		overrides, err = s.GetOrgLimits(ctx, organizationID, "")
+		if err != nil {
+			return fmt.Errorf("get org limits: %w", err)
+		}
+	}
+	if maxProjects := store.ResolveIntLimit(overrides, store.LimitMaxProjects, store.TierDefaultInt(tier, store.LimitMaxProjects, 0)); maxProjects != 0 {
+		count, err := s.CountActiveOrgProjects(ctx, organizationID)
+		if err != nil {
+			return fmt.Errorf("count active org projects: %w", err)
+		}
+		if count >= int64(maxProjects) {
+			return store.ErrOrgProjectLimitExceeded{OrganizationID: organizationID, Limit: maxProjects}
+		}
+	}
+	if maxPerHour := store.ResolveIntLimit(overrides, store.LimitMaxProjectsPerHour, store.TierDefaultInt(tier, store.LimitMaxProjectsPerHour, 0)); maxPerHour != 0 {
+		count, err := s.CountProjectsCreatedInLastHour(ctx, organizationID)
+		if err != nil {
+			return fmt.Errorf("count projects created in last hour: %w", err)
+		}
+		if count >= int64(maxPerHour) {
+			return store.ErrProjectRateLimitExceeded{OrganizationID: organizationID, Limit: maxPerHour}
+		}
+	}
+	return nil
+}
+
+func (s *sqlProjectStore) enforceBranchCreationLimits(ctx context.Context, organizationID, projectID string, limits store.OrgLimits) error {
+	count, err := s.CountActiveOrgBranches(ctx, organizationID)
+	if err != nil {
+		return fmt.Errorf("count active org branches: %w", err)
+	}
+	if count >= int64(limits.MaxBranchesPerOrg) {
+		return store.ErrOrgBranchLimitExceeded{OrganizationID: organizationID, Limit: limits.MaxBranchesPerOrg}
+	}
+	count, err = s.CountBranchesCreatedInLastHour(ctx, organizationID)
+	if err != nil {
+		return fmt.Errorf("count branches created in last hour: %w", err)
+	}
+	if count >= int64(limits.MaxBranchesPerHour) {
+		return store.ErrBranchRateLimitExceeded{OrganizationID: organizationID, Limit: limits.MaxBranchesPerHour}
+	}
+	count, err = s.CountActiveProjectBranches(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("count active project branches: %w", err)
+	}
+	if count >= int64(limits.MaxBranchesPerProject) {
+		return store.ErrTooManyBranches{ID: projectID, Limit: limits.MaxBranchesPerProject}
+	}
+	return nil
 }
 
 func (s *sqlProjectStore) CreateGithubInstallation(ctx context.Context, organization string, installationID int64) (*store.GithubInstallation, error) {
