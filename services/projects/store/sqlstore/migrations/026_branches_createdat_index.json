@@ -1,0 +1,13 @@
+{
+  "operations": [
+    {
+      "create_index": {
+        "table": "branches",
+        "name": "idx_branches_created_at",
+        "columns": {
+          "created_at": {}
+        }
+      }
+    }
+  ]
+}
