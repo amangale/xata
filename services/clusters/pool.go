@@ -12,19 +12,20 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"xata/internal/postgresversions"
 	cpv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
 )
 
 // findPoolCluster finds a healthy, pre-provisioned cluster from a ClusterPool
-// that matches the requested configuration (storage class, Postgres major
-// version, CPU, and memory).
+// that matches the requested configuration (storage class, Postgres version,
+// CPU, and memory).
 func findPoolCluster(ctx context.Context, kubeClient client.Client, clusterReader client.Reader, namespace, storageClass, image, cpuRequest, memory string) (string, *apiv1.Cluster, error) {
 	var pools cpv1alpha1.ClusterPoolList
 	if err := kubeClient.List(ctx, &pools, client.InNamespace(namespace)); err != nil {
 		return "", nil, fmt.Errorf("list cluster pools: %w", err)
 	}
 
-	requestedMajor := extractPostgresMajor(image)
+	requestedVersion := postgresversions.ExtractVersionFromImageName(image)
 	requestedCPU := resource.MustParse(cpuRequest)
 	requestedMemory := resource.MustParse(memory)
 
@@ -40,7 +41,7 @@ func findPoolCluster(ctx context.Context, kubeClient client.Client, clusterReade
 			continue
 		}
 
-		if extractPostgresMajor(spec.ImageName) != requestedMajor {
+		if postgresversions.ExtractVersionFromImageName(spec.ImageName) != requestedVersion {
 			continue
 		}
 
@@ -142,19 +143,6 @@ func findHealthyClusterInPool(
 	}
 
 	return nil, nil
-}
-
-func extractPostgresMajor(imageName string) string {
-	parts := strings.SplitN(imageName, ":", 2)
-	if len(parts) < 2 {
-		return ""
-	}
-	tag := parts[1]
-	before, _, ok := strings.Cut(tag, ".")
-	if !ok {
-		return tag
-	}
-	return before
 }
 
 // orphanCluster removes the cluster from its pool by clearing its

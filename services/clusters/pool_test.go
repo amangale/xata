@@ -20,45 +20,6 @@ import (
 	cpv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
 )
 
-func TestExtractPostgresMajor(t *testing.T) {
-	tests := map[string]struct {
-		image string
-		want  string
-	}{
-		"standard image": {
-			image: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
-			want:  "17",
-		},
-		"major version 18": {
-			image: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:18.3",
-			want:  "18",
-		},
-		"major version 16": {
-			image: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:16.3",
-			want:  "16",
-		},
-		"no tag": {
-			image: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus",
-			want:  "",
-		},
-		"tag without dot": {
-			image: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:latest",
-			want:  "latest",
-		},
-		"empty string": {
-			image: "",
-			want:  "",
-		},
-	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			got := extractPostgresMajor(tt.image)
-			require.Equal(t, tt.want, got)
-		})
-	}
-}
-
 func TestFindPoolCluster(t *testing.T) {
 	origTimeout := poolClusterWaitTimeout
 	origInterval := poolClusterPollInterval
@@ -127,7 +88,7 @@ func TestFindPoolCluster(t *testing.T) {
 		"matching pool with available cluster": {
 			objects:      []client.Object{matchingPool, availableCluster},
 			storageClass: "default-storage-class",
-			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.2",
+			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
 			cpuRequest:   "2",
 			memory:       "4Gi",
 			wantPoolName: "test-pool",
@@ -136,7 +97,7 @@ func TestFindPoolCluster(t *testing.T) {
 		"no matching pool - different storage class": {
 			objects:      []client.Object{matchingPool, availableCluster},
 			storageClass: "other-storage-class",
-			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.2",
+			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
 			cpuRequest:   "2",
 			memory:       "4Gi",
 		},
@@ -147,24 +108,31 @@ func TestFindPoolCluster(t *testing.T) {
 			cpuRequest:   "2",
 			memory:       "4Gi",
 		},
-		"no matching pool - different cpu": {
+		"no matching pool - different postgres minor": {
 			objects:      []client.Object{matchingPool, availableCluster},
 			storageClass: "default-storage-class",
 			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.2",
+			cpuRequest:   "2",
+			memory:       "4Gi",
+		},
+		"no matching pool - different cpu": {
+			objects:      []client.Object{matchingPool, availableCluster},
+			storageClass: "default-storage-class",
+			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
 			cpuRequest:   "4",
 			memory:       "4Gi",
 		},
 		"no matching pool - different memory": {
 			objects:      []client.Object{matchingPool, availableCluster},
 			storageClass: "default-storage-class",
-			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.2",
+			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
 			cpuRequest:   "2",
 			memory:       "8Gi",
 		},
 		"matching pool but no available clusters": {
 			objects:      []client.Object{matchingPool},
 			storageClass: "default-storage-class",
-			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.2",
+			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
 			cpuRequest:   "2",
 			memory:       "4Gi",
 		},
@@ -182,14 +150,14 @@ func TestFindPoolCluster(t *testing.T) {
 				},
 			}},
 			storageClass: "default-storage-class",
-			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.2",
+			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
 			cpuRequest:   "2",
 			memory:       "4Gi",
 		},
 		"no pools at all": {
 			objects:      nil,
 			storageClass: "default-storage-class",
-			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.2",
+			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
 			cpuRequest:   "2",
 			memory:       "4Gi",
 		},
