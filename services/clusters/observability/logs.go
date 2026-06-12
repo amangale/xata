@@ -5,6 +5,8 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
+	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -105,14 +107,14 @@ func expandLevels(levels []string) []string {
 	return out
 }
 
-// Query executes the LogsQL query and returns up to limit entries plus an
-// opaque pagination cursor. The cursor carries the timestamp of the oldest
-// returned entry so a subsequent call can resume strictly before it.
+// Query runs the LogsQL query and returns up to limit entries plus an opaque
+// cursor. The cursor pairs the oldest returned timestamp with the keys seen at
+// it, so resuming neither drops nor repeats rows sharing that timestamp.
 func (q *LogsQuerier) Query(ctx context.Context, branchID string, start, end time.Time, filters []LogFilter, limit int, cursor string) (*LogsResult, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("limit must be positive")
 	}
-	cursorNanos, err := decodeCursor(cursor)
+	cursorNanos, cursorSeen, err := decodeCursor(cursor)
 	if err != nil {
 		return nil, fmt.Errorf("decode cursor: %w", err)
 	}
@@ -122,14 +124,34 @@ func (q *LogsQuerier) Query(ctx context.Context, branchID string, start, end tim
 		return nil, err
 	}
 
-	rows, err := q.backend.Query(ctx, lql, start, end, limit)
+	fetchLimit := limit + len(cursorSeen)
+	rows, err := q.backend.Query(ctx, lql, start, end, fetchLimit)
 	if err != nil {
 		return nil, fmt.Errorf("query backend: %w", err)
 	}
 
 	out := &LogsResult{Entries: make([]LogEntry, 0, len(rows))}
 	page := pagination.New(maxLogPageBytes)
+	// Rows are _time DESC, so the oldest emitted timestamp's rows sit at the
+	// tail; collect their keys for the resume cursor.
+	var boundaryNanos int64
+	var boundaryKeys []string
+	capped := false
 	for _, r := range rows {
+		key := rowKey(r)
+		nanos := r.Timestamp.UnixNano()
+		// Inclusive resume refetches the cursor timestamp; skip what the
+		// previous page already returned there.
+		if nanos == cursorNanos && cursorSeen[key] {
+			continue
+		}
+		// The overlap fetch can yield more than limit unseen rows; stop at the
+		// caller's limit and let the cursor carry the remainder forward.
+		if len(out.Entries) == limit {
+			capped = true
+			break
+		}
+
 		message, logger := unwrapCNPGBody(r.Message)
 		message = redactPassword(message)
 		message = pagination.Truncate(message, logTruncationMarker, maxLogMessageBytes)
@@ -152,14 +174,56 @@ func (q *LogsQuerier) Query(ctx context.Context, branchID string, start, end tim
 			entry.Process = r.Process
 		}
 		out.Entries = append(out.Entries, entry)
+
+		if nanos != boundaryNanos {
+			boundaryNanos, boundaryKeys = nanos, boundaryKeys[:0]
+		}
+		boundaryKeys = append(boundaryKeys, key)
 	}
 
-	// Rows are _time DESC; cursor off the oldest returned entry when more
-	// remain — either we hit the byte budget or the backend filled the limit.
-	if len(out.Entries) > 0 && (page.Stopped() || len(rows) >= limit) {
-		out.NextCursor = encodeCursor(out.Entries[len(out.Entries)-1].Timestamp)
+	// More rows wait if we capped, hit the byte budget, or filled the fetch.
+	moreRemain := capped || page.Stopped() || len(rows) >= fetchLimit
+	if !moreRemain {
+		return out, nil
 	}
+	if len(out.Entries) == 0 {
+		// Whole fetch was already-seen rows at the cursor timestamp (identical
+		// lines, or a backend ignoring _time order). _time:<= is inclusive, so
+		// stepping one ns past it unsticks pagination on the next fetch.
+		out.NextCursor = encodeCursor(cursorNanos-1, nil)
+		return out, nil
+	}
+	// A timestamp spanning pages must carry forward every key already returned
+	// at it, not just this page's, or the next fetch would re-emit them.
+	if boundaryNanos == cursorNanos {
+		for k := range cursorSeen {
+			boundaryKeys = append(boundaryKeys, k)
+		}
+	}
+	out.NextCursor = encodeCursor(boundaryNanos, boundaryKeys)
 	return out, nil
+}
+
+// rowKeyMessageBytes caps how much of the message feeds the hash. A line can
+// reach maxLogMessageBytes (1 MiB); hashing only the prefix bounds the per-row
+// work without hurting uniqueness, since distinct rows at one nanosecond
+// effectively always differ within the first few KB.
+const rowKeyMessageBytes = 2048
+
+// rowKey is a content hash standing in for the per-row id VictoriaLogs lacks.
+// Lines sharing their hashed prefix at one timestamp collide, which is fine:
+// in practice they are the same content.
+func rowKey(r LogRow) string {
+	msg := r.Message
+	if len(msg) > rowKeyMessageBytes {
+		msg = msg[:rowKeyMessageBytes]
+	}
+	h := fnv.New64a()
+	for _, s := range []string{r.Pod, r.Severity, r.Process, msg} {
+		io.WriteString(h, s)
+		h.Write([]byte{0})
+	}
+	return strconv.FormatUint(h.Sum64(), 16)
 }
 
 // buildLogsQL renders the LogsQL expression. It starts with the namespace
@@ -168,11 +232,13 @@ func (q *LogsQuerier) Query(ctx context.Context, branchID string, start, end tim
 // LogsQL field-filter syntax (`field:value`, `field:in (a,b)`,
 // `field:~"regex"`) which is the stable subset supported by VictoriaLogs.
 //
-// resumeBeforeNanos > 0 adds `_time:<{ts}` (RFC3339Nano) so paginated
-// queries pick up strictly older rows than the previous page's oldest
-// timestamp. VictoriaLogs's `_time:` filter parses bare integers as
-// durations, so the cursor must be serialized as an ISO timestamp.
-func buildLogsQL(namespace, branchID string, filters []LogFilter, resumeBeforeNanos int64) (string, error) {
+// resumeOnOrBeforeNanos > 0 adds `_time:<={ts}` (RFC3339Nano) so paginated
+// queries pick up the previous page's oldest timestamp again. The caller skips
+// the rows it already returned at that timestamp, so same-timestamp rows
+// straddling the page boundary are neither dropped nor duplicated.
+// VictoriaLogs's `_time:` filter parses bare integers as durations, so the
+// cursor must be serialized as an ISO timestamp.
+func buildLogsQL(namespace, branchID string, filters []LogFilter, resumeOnOrBeforeNanos int64) (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "kubernetes.namespace_name:=%q AND kubernetes.container_name:=%q", namespace, "postgres")
 	// The postgres container streams output from CNPG's instance manager,
@@ -180,8 +246,8 @@ func buildLogsQL(namespace, branchID string, filters []LogFilter, resumeBeforeNa
 	// (logger="backup") and actual postgres records (logger="postgres").
 	b.WriteString(` AND logger:in ("postgres","pgaudit")`)
 	fmt.Fprintf(&b, ` AND branch_id:=%q`, branchID)
-	if resumeBeforeNanos > 0 {
-		fmt.Fprintf(&b, " AND _time:<%s", time.Unix(0, resumeBeforeNanos).UTC().Format(time.RFC3339Nano))
+	if resumeOnOrBeforeNanos > 0 {
+		fmt.Fprintf(&b, " AND _time:<=%s", time.Unix(0, resumeOnOrBeforeNanos).UTC().Format(time.RFC3339Nano))
 	}
 
 	for _, f := range filters {
@@ -331,20 +397,29 @@ func redactPassword(s string) string {
 	return rolePassword.ReplaceAllString(s, "$1 <REDACTED>")
 }
 
-// encodeCursor / decodeCursor turn a timestamp into an opaque string for
-// pagination. UnixNano-as-decimal is enough — the cursor is opaque to clients,
-// and the integer round-trips without timezone or precision quirks.
-func encodeCursor(t time.Time) string {
-	return strconv.FormatInt(t.UnixNano(), 10)
+// The cursor is opaque: "{unixNano}:{key,key,...}". The timestamp drives the
+// resume clause; the keys let the next page skip rows already returned there.
+func encodeCursor(nanos int64, keys []string) string {
+	return strconv.FormatInt(nanos, 10) + ":" + strings.Join(keys, ",")
 }
 
-func decodeCursor(c string) (int64, error) {
+func decodeCursor(c string) (int64, map[string]bool, error) {
 	if c == "" {
-		return 0, nil
+		return 0, nil, nil
 	}
-	n, err := strconv.ParseInt(c, 10, 64)
+	nanos, keys, ok := strings.Cut(c, ":")
+	if !ok {
+		return 0, nil, fmt.Errorf("cut cursor")
+	}
+	n, err := strconv.ParseInt(nanos, 10, 64)
 	if err != nil || n <= 0 {
-		return 0, fmt.Errorf("invalid cursor")
+		return 0, nil, fmt.Errorf("parse cursor timestamp")
 	}
-	return n, nil
+	seen := make(map[string]bool)
+	if keys != "" {
+		for k := range strings.SplitSeq(keys, ",") {
+			seen[k] = true
+		}
+	}
+	return n, seen, nil
 }

@@ -2,6 +2,8 @@ package observability
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +22,43 @@ func (f *fakeLogsBackend) Query(_ context.Context, query string, _, _ time.Time,
 	return f.rows, f.err
 }
 
+// boundedLogsBackend honours the cursor's `_time:<=` clause and the row limit,
+// like VictoriaLogs, so the querier's pagination can be exercised end to end.
+type boundedLogsBackend struct {
+	rows []LogRow
+}
+
+func (b *boundedLogsBackend) Query(_ context.Context, query string, _, _ time.Time, limit int) ([]LogRow, error) {
+	bound, hasBound := time.Time{}, false
+	if _, after, ok := strings.Cut(query, "_time:<="); ok {
+		ts := after
+		if before, _, found := strings.Cut(after, " "); found {
+			ts = before
+		}
+		t, err := time.Parse(time.RFC3339Nano, ts)
+		if err != nil {
+			return nil, err
+		}
+		bound, hasBound = t, true
+	}
+
+	var filtered []LogRow
+	for _, r := range b.rows {
+		if hasBound && r.Timestamp.After(bound) {
+			continue
+		}
+		filtered = append(filtered, r)
+	}
+	// Newest first, like VictoriaLogs; same-timestamp ties keep input order.
+	sort.SliceStable(filtered, func(i, j int) bool {
+		return filtered[i].Timestamp.After(filtered[j].Timestamp)
+	})
+	if limit > 0 && len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+	return filtered, nil
+}
+
 func TestBuildLogsQL_AppendsBranchScope(t *testing.T) {
 	q, err := buildLogsQL("xata-clusters", "br-1", nil, 0)
 	require.NoError(t, err)
@@ -33,7 +72,7 @@ func TestBuildLogsQL_AppendsBranchScope(t *testing.T) {
 func TestBuildLogsQL_ResumeCursorClause(t *testing.T) {
 	q, err := buildLogsQL("xata-clusters", "br-1", nil, 1730000000000000000)
 	require.NoError(t, err)
-	require.Contains(t, q, "_time:<2024-10-27T03:33:20Z")
+	require.Contains(t, q, "_time:<=2024-10-27T03:33:20Z")
 }
 
 func TestCompileLogFilter(t *testing.T) {
@@ -131,7 +170,7 @@ func TestBuildLogsQL_FullQueryLocksScopeAndFields(t *testing.T) {
 	want := `kubernetes.namespace_name:="xata-clusters" AND kubernetes.container_name:="postgres"` +
 		` AND logger:in ("postgres","pgaudit")` +
 		` AND branch_id:="br-1"` +
-		` AND _time:<2024-10-27T03:33:20Z` +
+		` AND _time:<=2024-10-27T03:33:20Z` +
 		` AND kubernetes.pod_name:in ("br-1-0")` +
 		` AND severity_text:in ("ERROR","FATAL","PANIC","CRITICAL")` +
 		` AND backend_type:in ("checkpointer")` +
@@ -162,9 +201,10 @@ func TestLogsQuerier_DecodesEntriesAndSetsCursor(t *testing.T) {
 	require.Equal(t, "info", res.Entries[1].Level)
 
 	require.NotEmpty(t, res.NextCursor, "cursor should be set when page is full")
-	resumeNanos, err := decodeCursor(res.NextCursor)
+	resumeNanos, resumeSeen, err := decodeCursor(res.NextCursor)
 	require.NoError(t, err)
-	require.Equal(t, t2.UnixNano(), resumeNanos, "cursor anchors at oldest entry; LQL clause is strict less-than")
+	require.Equal(t, t2.UnixNano(), resumeNanos, "cursor anchors at oldest entry")
+	require.NotEmpty(t, resumeSeen, "cursor carries the keys returned at the oldest timestamp")
 }
 
 func TestLogsQuerier_Query(t *testing.T) {
@@ -195,7 +235,7 @@ func TestLogsQuerier_Query(t *testing.T) {
 			wantEntries: 8,
 			wantCursor:  true,
 			check: func(t *testing.T, res *LogsResult) {
-				resumeNanos, err := decodeCursor(res.NextCursor)
+				resumeNanos, _, err := decodeCursor(res.NextCursor)
 				require.NoError(t, err)
 				require.Equal(t, res.Entries[len(res.Entries)-1].Timestamp.UnixNano(), resumeNanos)
 			},
@@ -230,6 +270,121 @@ func TestLogsQuerier_Query(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLogsQuerier_PaginatesWithoutGaps(t *testing.T) {
+	base := time.Date(2025, 5, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := map[string]struct {
+		rows  []LogRow
+		limit int
+	}{
+		// ~1 MiB messages, so the 8 MiB byte budget cuts the page inside the
+		// timestamp shared by rows 7..9.
+		"collision straddles byte-budget boundary": {
+			rows:  collidingRows(base, 12, 7, 9, maxLogMessageBytes-16),
+			limit: 1000,
+		},
+		// Small messages, so the row limit cuts the page inside the timestamp
+		// shared by rows 3..5 before the byte budget bites.
+		"collision straddles row-limit boundary": {
+			rows:  collidingRows(base, 12, 3, 5, 32),
+			limit: 4,
+		},
+		"no collisions": {
+			rows:  collidingRows(base, 10, -1, -1, 32),
+			limit: 3,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			q := NewLogsQuerier(&boundedLogsBackend{rows: tt.rows}, "xata-clusters")
+
+			got := map[string]int{}
+			cursor := ""
+			for range len(tt.rows) + 1 {
+				res, err := q.Query(context.Background(), "br-1", base.Add(-time.Hour), base, nil, tt.limit, cursor)
+				require.NoError(t, err)
+				for _, e := range res.Entries {
+					got[e.Message]++
+				}
+				if res.NextCursor == "" {
+					break
+				}
+				cursor = res.NextCursor
+			}
+
+			require.Len(t, got, len(tt.rows), "every row is returned across pages, none dropped at a boundary")
+			for msg, n := range got {
+				require.Equal(t, 1, n, "row %q returned exactly once, no duplicate at a boundary", msg)
+			}
+		})
+	}
+}
+
+func TestLogsQuerier_PaginatesPastFullTimestampGroups(t *testing.T) {
+	base := time.Date(2025, 5, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := map[string]struct {
+		rows  []LogRow
+		limit int
+	}{
+		// limit 1 refetches and skips the resume timestamp every page, so the
+		// cursor must step past it or pagination stalls after the first row.
+		"limit 1, distinct timestamps": {rows: collidingRows(base, 6, -1, -1, 32), limit: 1},
+		// A collision group exactly the size of the limit fills a page with the
+		// resume timestamp's rows — the case that used to stall.
+		"collision group equals limit": {rows: collidingRows(base, 6, 1, 2, 32), limit: 2},
+		// A collision group larger than the limit can't fit on one page; the
+		// surplus rows at that timestamp used to be silently dropped.
+		"collision group exceeds limit":        {rows: collidingRows(base, 6, 1, 3, 32), limit: 2},
+		"large collision group, small limit":   {rows: collidingRows(base, 9, 1, 6, 32), limit: 2},
+		"collision group exceeds limit at one": {rows: collidingRows(base, 6, 1, 3, 32), limit: 1},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			q := NewLogsQuerier(&boundedLogsBackend{rows: tt.rows}, "xata-clusters")
+
+			got := map[string]int{}
+			cursor := ""
+			for i := 0; ; i++ {
+				require.Less(t, i, 4*len(tt.rows)+10, "pagination must terminate, not stall")
+				res, err := q.Query(context.Background(), "br-1", base.Add(-time.Hour), base, nil, tt.limit, cursor)
+				require.NoError(t, err)
+				for _, e := range res.Entries {
+					got[e.Message]++
+				}
+				if res.NextCursor == "" {
+					break
+				}
+				cursor = res.NextCursor
+			}
+
+			require.Len(t, got, len(tt.rows), "every row returned, none dropped")
+			for msg, n := range got {
+				require.Equal(t, 1, n, "row %q returned exactly once", msg)
+			}
+		})
+	}
+}
+
+// collidingRows builds count rows newest-first, one per minute, forcing rows
+// [collideStart, collideEnd] onto a single timestamp so a page boundary can
+// fall inside that group. A negative range disables the collision.
+func collidingRows(base time.Time, count, collideStart, collideEnd, msgSize int) []LogRow {
+	body := strings.Repeat("x", msgSize)
+	rows := make([]LogRow, count)
+	for i := range rows {
+		ts := base.Add(-time.Duration(i) * time.Minute)
+		if i >= collideStart && i <= collideEnd {
+			ts = base.Add(-time.Duration(collideStart) * time.Minute)
+		}
+		// The per-row marker leads the message so rows stay distinct within the
+		// prefix rowKey hashes, mirroring real logs where distinct lines diverge
+		// early rather than only after a megabyte of identical text.
+		rows[i] = LogRow{Timestamp: ts, Pod: "br-1-0", Message: fmt.Sprintf("%02d-%s", i, body)}
+	}
+	return rows
 }
 
 func TestUnwrapCNPGBody(t *testing.T) {
