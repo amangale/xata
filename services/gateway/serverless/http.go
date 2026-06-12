@@ -40,7 +40,7 @@ const (
 func (h *handler) Query(c echo.Context, params spec.QueryParams) error {
 	ctx := c.Request().Context()
 
-	connInfo, err := parseConnectionString(ptr.Deref(params.ConnectionString, ""))
+	connInfo, err := parseConnectionString(c.Request().Header.Get("Connection-String"))
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, errorResponse("UNAUTHORIZED", err.Error()))
 	}

@@ -17,30 +17,33 @@ paths:
   /sql:
     servers:
       - url: https://{branch}.{region}.xata.tech
-        description: Xata Gateway
+        description: Xata Gateway. The hostname encodes the target branch and region.
         variables:
           branch:
             default: my-branch
+            description: Branch ID. Use the branch `id`, NOT its human-readable name
           region:
             default: us-east-1
+            description: Branch region. The `us-east-1` default is a placeholder and may not be the region of your database.
     post:
       operationId: query
       summary: Execute SQL query
       description: |
         Execute a single SQL query or a batch of queries against a PostgreSQL branch.
 
+        **Authentication:** send the branch's PostgreSQL connection string in the
+        `Connection-String` header. The control-plane API key (Bearer token) is
+        **not** accepted on the gateway host.
+
+        **Routing:** the target branch, region, and endpoint type are taken from the
+        hostname embedded in the connection string, which must match the request host.
+        See the `Connection-String` security scheme for the host format.
+
         **Single query:** provide `query` (and optional `params`) at the top level.
 
         **Batch:** provide `queries` as an array of query objects, or send the request body
         as a JSON array. Batch queries execute within a single transaction.
       parameters:
-        - name: Connection-String
-          in: header
-          description: PostgreSQL connection string (`postgres://user:pass@host/db`). The hostname encodes the target branch and endpoint type.
-          required: false
-          schema:
-            type: string
-            format: uri
         - name: Array-Mode
           in: header
           description: When `true`, return rows as arrays instead of objects.
@@ -94,6 +97,21 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/SQLRequest'
+            examples:
+              single:
+                summary: Single parameterized query
+                value:
+                  query: SELECT id, name FROM users WHERE id = $1
+                  params:
+                    - 42
+              batch:
+                summary: Batch of queries in one transaction
+                value:
+                  queries:
+                    - query: INSERT INTO logs (message) VALUES ($1)
+                      params:
+                        - hello
+                    - query: SELECT count(*) FROM logs
       responses:
         '200':
           description: Query executed successfully
@@ -103,6 +121,53 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/QueryResult'
                   - $ref: '#/components/schemas/BatchResponse'
+              examples:
+                single:
+                  summary: Result of the single query above
+                  value:
+                    fields:
+                      - name: id
+                        tableID: 0
+                        columnID: 0
+                        dataTypeID: 23
+                        dataTypeSize: 4
+                        dataTypeModifier: -1
+                        format: text
+                      - name: name
+                        tableID: 0
+                        columnID: 0
+                        dataTypeID: 25
+                        dataTypeSize: -1
+                        dataTypeModifier: -1
+                        format: text
+                    command: SELECT
+                    rowCount: 1
+                    rows:
+                      - id: 42
+                        name: Ada
+                    rowAsArray: false
+                batch:
+                  summary: Result of the batch above, one entry per query
+                  value:
+                    results:
+                      - command: INSERT
+                        fields: []
+                        rowCount: 1
+                        rows: []
+                        rowAsArray: false
+                      - command: SELECT
+                        fields:
+                          - name: count
+                            tableID: 0
+                            columnID: 0
+                            dataTypeID: 20
+                            dataTypeSize: 8
+                            dataTypeModifier: -1
+                            format: text
+                        rowCount: 1
+                        rows:
+                          - count: '1'
+                        rowAsArray: false
         '400':
           description: Invalid request or SQL error
           content:
@@ -127,17 +192,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - branchConnectionString: []
       tags:
         - Gateway
   /v2:
     servers:
       - url: https://{branch}.{region}.xata.tech
-        description: Xata Gateway
+        description: Xata Gateway. The hostname encodes the target branch and region.
         variables:
           branch:
             default: my-branch
+            description: Branch ID. Use the branch `id`, NOT its human-readable name
           region:
             default: us-east-1
+            description: Branch region. The `us-east-1` default is a placeholder and may not be the region of your database.
     get:
       operationId: websocket
       summary: WebSocket wire protocol proxy
@@ -145,8 +214,10 @@ paths:
         Upgrade to a WebSocket connection that proxies the PostgreSQL wire protocol.
         The client sends and receives PostgreSQL protocol messages over binary WebSocket frames.
 
-        Authentication is handled via the PostgreSQL startup message within the wire protocol,
-        using the same connection-string hostname conventions as the HTTP SQL endpoint.
+        **Authentication:** the same branch connection string credential as the
+        HTTP SQL endpoint is used, but it is supplied via the PostgreSQL startup
+        message inside the wire protocol rather than an HTTP header. The
+        control-plane API key (Bearer token) is not accepted.
       responses:
         '101':
           description: Switching Protocols — WebSocket connection established
@@ -341,3 +412,9 @@ components:
           type: string
       required:
         - message
+  securitySchemes:
+    branchConnectionString:
+      type: apiKey
+      in: header
+      name: Connection-String
+      description: Branch PostgreSQL connection string (`postgres://user:pass@{branch}.{region}.xata.tech/db`), including the embedded password. The hostname selects the target branch, region, and endpoint type (the `-rw`/`-ro` suffix, see `EndpointType`), and must match the request host. Obtain it from the Xata dashboard or the control-plane API. This is the only credential the gateway accepts; the control-plane API key (Bearer token) is rejected here. For the WebSocket endpoint (`GET /v2`) the same connection string is conveyed via the PostgreSQL startup message instead of this header.

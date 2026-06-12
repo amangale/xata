@@ -966,10 +966,11 @@ func TestQuery_IPFilter(t *testing.T) {
 			body := strings.NewReader(`{"query": "SELECT 1"}`)
 			req := httptest.NewRequest(http.MethodPost, "/sql", body)
 			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Connection-String", connStr)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 
-			err := h.Query(c, spec.QueryParams{ConnectionString: new(connStr)})
+			err := h.Query(c, spec.QueryParams{})
 			if tc.wantStatus >= http.StatusInternalServerError {
 				require.Error(t, err)
 			} else {
