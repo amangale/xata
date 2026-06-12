@@ -520,6 +520,10 @@ pgaudit.log:
     (e.g. `write, ddl` for change tracking, `read, write` for data access auditing) or use `all, -misc, -misc_set`
     to capture everything except noisy `SET` statements. `all` produces high log volume on busy branches.
 
+    Security note: pgaudit redacts passwords in role statements (`CREATE`/`ALTER ROLE ... PASSWORD`) and user mappings,
+    but it does not redact passwords embedded in connection strings (for example `CREATE SUBSCRIPTION ... CONNECTION '... password=...'`
+    or `dblink`/`postgres_fdw` calls). Avoid putting credentials in such statements while audit logging is enabled.
+
 pgaudit.log_catalog:
   section: Extensions
   extension: pgaudit

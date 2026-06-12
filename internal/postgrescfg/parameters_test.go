@@ -334,6 +334,22 @@ func TestValidateParameterValue(t *testing.T) {
 			value:   "   ",
 			wantErr: true,
 		},
+		{
+			name: "string with embedded newline rejected",
+			spec: PostgresParameterSpec{
+				ParameterType: ParameterTypeString,
+			},
+			value:   "evil'\nlog_statement = 'all",
+			wantErr: true,
+		},
+		{
+			name: "string with carriage return rejected",
+			spec: PostgresParameterSpec{
+				ParameterType: ParameterTypeString,
+			},
+			value:   "foo\rbar",
+			wantErr: true,
+		},
 
 		// Boolean parameter tests
 		{

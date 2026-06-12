@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"xata/internal/extensions"
 	"xata/internal/postgresversions"
@@ -293,6 +294,12 @@ func parseDuration(s string) (time.Duration, error) {
 
 // ValidateParameterValue validates if a value is valid for a given PostgresParameterSpec
 func ValidateParameterValue(spec PostgresParameterSpec, value string) error {
+	// A control character such as a newline survives into postgresql.conf and can
+	// stop the instance from starting, so reject it before trimming.
+	if strings.IndexFunc(value, unicode.IsControl) >= 0 {
+		return fmt.Errorf("value must not contain control characters")
+	}
+
 	value = strings.TrimSpace(value)
 
 	switch spec.ParameterType {
