@@ -173,10 +173,10 @@ spec:
               rule: '!has(oldSelf.storageNode) || size(oldSelf.storageNode) == 0 ||
                 self.storageNode == oldSelf.storageNode'
             - fieldPath: .size
-              message: spec.size is immutable
+              message: spec.size can only be increased
               reason: FieldValueForbidden
               rule: '!has(self.size) && !has(oldSelf.size) || has(self.size) && has(oldSelf.size)
-                && quantity(self.size).compareTo(quantity(oldSelf.size)) == 0'
+                && quantity(self.size).compareTo(quantity(oldSelf.size)) >= 0'
             - fieldPath: .source
               message: spec.source is immutable once set
               reason: FieldValueForbidden
