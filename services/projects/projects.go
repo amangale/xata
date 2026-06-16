@@ -23,6 +23,7 @@ import (
 	"xata/services/projects/api"
 	"xata/services/projects/api/spec"
 	"xata/services/projects/cells"
+	"xata/services/projects/provisioner"
 	"xata/services/projects/rpc"
 	"xata/services/projects/store"
 	"xata/services/projects/store/sqlstore"
@@ -172,6 +173,8 @@ func (s *ProjectsService) RegisterHTTPHandlers(o *o11y.O, router *echo.Group) er
 	// VictoriaMetrics/VictoriaLogs backend via clusters gRPC.
 	metricsClient := metrics.NewCellsClient(cellsConn)
 
+	prov := provisioner.NewBranchProvisioner(s.store, cellsConn)
+
 	spec.RegisterHandlers(group,
 		api.NewAPIHandler(
 			s.feat,
@@ -182,7 +185,8 @@ func (s *ProjectsService) RegisterHTTPHandlers(o *o11y.O, router *echo.Group) er
 			s.scheduler,
 			s.analytics,
 			&postgrescfg.DefaultPostgresConfigProvider{},
-			&postgresversions.DefaultImageProvider{}),
+			&postgresversions.DefaultImageProvider{},
+			prov),
 	)
 
 	return nil

@@ -27,6 +27,7 @@ import (
 	"xata/services/projects/api/spec"
 	"xata/services/projects/cells"
 	"xata/services/projects/metrics"
+	"xata/services/projects/provisioner"
 	"xata/services/projects/scheduler"
 	"xata/services/projects/store"
 
@@ -93,9 +94,12 @@ type handler struct {
 
 	// imageProvider is the provider for the PostgreSQL images
 	imageProvider postgresversions.ImageProvider
+
+	// provisioner handles branch create/delete provisioning
+	provisioner provisioner.Provisioner
 }
 
-func NewAPIHandler(feat openfeature.Client, store store.ProjectsStore, cells cells.Cells, gatewayHostPort string, metricsClient metrics.Client, scheduler *scheduler.Scheduler, analytics analytics.Client, postgresConfigProvider postgrescfg.PostgresConfigProvider, imageProvider postgresversions.ImageProvider) spec.ServerInterface {
+func NewAPIHandler(feat openfeature.Client, store store.ProjectsStore, cells cells.Cells, gatewayHostPort string, metricsClient metrics.Client, scheduler *scheduler.Scheduler, analytics analytics.Client, postgresConfigProvider postgrescfg.PostgresConfigProvider, imageProvider postgresversions.ImageProvider, orch provisioner.Provisioner) spec.ServerInterface {
 	return &handler{
 		feat:                   feat,
 		store:                  store,
@@ -106,6 +110,7 @@ func NewAPIHandler(feat openfeature.Client, store store.ProjectsStore, cells cel
 		analytics:              analytics,
 		postgresConfigProvider: postgresConfigProvider,
 		imageProvider:          imageProvider,
+		provisioner:            orch,
 	}
 }
 
@@ -614,13 +619,9 @@ func validateBackupConfiguration(branchName string, c *spec.BackupConfiguration)
 	return nil
 }
 
-type ClusterServicePayload struct {
-	ParentID       *string
-	Configuration  clustersv1.ClusterConfiguration
-	CellID         string
-	Region         string
-	BackupsEnabled bool
-}
+// ClusterServicePayload is an alias for the provisioner payload type, kept
+// for use by other handler methods (e.g. RestoreFromBackup).
+type ClusterServicePayload = provisioner.ClusterServicePayload
 
 // Create a new branch
 // (POST /organizations/{organizationID}/projects/{projectID}/branches)
@@ -700,112 +701,69 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 			return ErrorInvalidParam{BranchName: body.Name, Param: "backupConfiguration", Message: "backup configuration cannot be specified when backups are disabled in the selected region"}
 		}
 
-		// we are now in possession of the following:
-		// cellID
-		// parentID (valid for child branch, nil for main branch
-		// AND
-		// (vcpu request and limit, memory, default postgres params, and image) for main branch
-		// for child branch - we get them from the parent in the clusters service
+		// Populate remaining payload fields for the provisioner
+		createClusterPayload.Description = body.Description
+		createClusterPayload.BackupRetentionPeriod = apiToStoreBackupConfig(body.BackupConfiguration)
+		createClusterPayload.BackupConfig = apiToClustersBackupConfig(body.BackupConfiguration, createClusterPayload.BackupsEnabled, usePgBackRest)
+		createClusterPayload.Flags = provisioner.FlagsConfig{
+			UsePool:     s.feat.BoolValue(ctx, flags.UseClusterPool),
+			UseXatastor: useXatastor,
+		}
+		createClusterPayload.UsageTier = claims.Organizations[organizationID].UsageTier
+		createClusterPayload.Limits = orgLimitsForStore(orgLimits)
 
-		// Acquire project lock BEFORE reading project to prevent race conditions with IP filtering updates
-		// This ensures we read the current IP filtering settings even if an update is in progress
+		project, err := s.store.GetProject(ctx, organizationID, projectID)
+		if err != nil {
+			return err
+		}
+		createClusterPayload.Configuration.ScaleToZero = apiToClustersScaleToZero(body.ScaleToZero, createClusterPayload.ParentID, project)
+
+		// Acquire project lock BEFORE creating the branch to prevent race conditions with IP filtering updates
 		releaseLock, err := s.store.AcquireProjectLock(ctx, projectID)
 		if err != nil {
 			return fmt.Errorf("failed to acquire project lock: %w", err)
 		}
 		defer releaseLock()
 
-		return s.withProject(c, organizationID, projectID, func(project *store.Project) error {
-			branch, err := s.store.CreateBranch(ctx, organizationID, projectID, createClusterPayload.CellID, &store.CreateBranchConfiguration{
-				Name:                  body.Name,
-				ParentID:              createClusterPayload.ParentID,
-				Description:           body.Description,
-				BackupRetentionPeriod: apiToStoreBackupConfig(body.BackupConfiguration),
-				BackupsEnabled:        createClusterPayload.BackupsEnabled,
-				UsageTier:             claims.Organizations[organizationID].UsageTier,
-				Limits:                orgLimitsForStore(orgLimits),
-			}, func(branch *store.Branch) error {
-				scaleToZero := apiToClustersScaleToZero(body.ScaleToZero, createClusterPayload.ParentID, project)
-				createClusterPayload.Configuration.ScaleToZero = scaleToZero
-				log.Ctx(ctx).Info().Bool("usePgBackRest", usePgBackRest).Msg("pgbackrest feature flag in the store")
-				request := clustersv1.CreatePostgresClusterRequest{
-					Id:                  branch.ID,
-					ParentId:            branch.ParentID,
-					OrganizationId:      organizationID,
-					ProjectId:           projectID,
-					Configuration:       &createClusterPayload.Configuration,
-					BackupConfiguration: apiToClustersBackupConfig(body.BackupConfiguration, createClusterPayload.BackupsEnabled, usePgBackRest),
-				}
-				if branch.ParentID != nil {
-					request.DataSource = &clustersv1.CreatePostgresClusterRequest_ClusterSnapshot{
-						ClusterSnapshot: &clustersv1.ClusterSnapshot{
-							ClusterId: *branch.ParentID,
-						},
-					}
-				}
-				usePool := s.feat.BoolValue(ctx, flags.UseClusterPool)
-				log.Ctx(ctx).Info().Bool("usePool", usePool).Msg("cluster pool feature flag")
-				if usePool {
-					request.UsePool = new(true)
-				}
-
-				if branch.ParentID == nil {
-					log.Ctx(ctx).Info().Bool("useXatastor", useXatastor).Msg("xatastor feature flag")
-					if useXatastor {
-						request.UseXatastor = new(true)
-					}
-				}
-
-				client, err := s.cells.GetCellConnection(ctx, organizationID, createClusterPayload.CellID)
-				if err != nil {
-					return err
-				}
-				defer client.Close()
-
-				_, err = client.CreatePostgresCluster(ctx, &request)
-				if err != nil {
-					return err
-				}
-
-				return s.setupBranchOnPrimaryCell(ctx, organizationID, createClusterPayload.Region, createClusterPayload.CellID, branch.ID, project)
-			})
-			if err != nil {
-				st, _ := status.FromError(err)
-				if st.Code() == codes.NotFound && createClusterPayload.ParentID != nil {
-					return ErrorBranchNotFound{BranchID: *createClusterPayload.ParentID}
-				}
-				if st.Code() == codes.InvalidArgument {
-					return ErrorInvalidParam{BranchName: body.Name, Param: "configuration", Message: st.Message()}
-				}
-				if st.Code() == codes.FailedPrecondition && createClusterPayload.ParentID != nil {
-					return ErrorParentBranchUnhealthy{ParentID: *createClusterPayload.ParentID}
-				}
-				return err
+		branch, err := s.provisioner.CreateBranch(ctx, projectID, organizationID, body.Name, &createClusterPayload)
+		if err != nil {
+			var notFound provisioner.ErrBranchNotFound
+			if errors.As(err, &notFound) {
+				return ErrorBranchNotFound{BranchID: notFound.BranchID}
 			}
-
-			var analyticsEvent events.Event
-			switch payload := value.(type) {
-			case spec.BranchFromConfiguration:
-				analyticsEvent = events.NewBranchFromConfigurationEvent(
-					string(organizationID),
-					projectID,
-					branch.ID,
-					branch.Region,
-					string(payload.Configuration.Image),
-					payload.Configuration.InstanceType,
-					int(payload.Configuration.Replicas),
-					payload.Configuration.Storage,
-				)
-			case spec.BranchFromParent:
-				analyticsEvent = events.NewBranchFromParentEvent(string(organizationID), projectID, payload.ParentID, branch.ID, branch.Region)
+			var invalidCfg provisioner.ErrInvalidConfiguration
+			if errors.As(err, &invalidCfg) {
+				return ErrorInvalidParam{BranchName: body.Name, Param: "configuration", Message: invalidCfg.Message}
 			}
-			s.analytics.Track(c.Request().Context(), analyticsEvent)
+			var unhealthy provisioner.ErrParentBranchUnhealthy
+			if errors.As(err, &unhealthy) {
+				return ErrorParentBranchUnhealthy{ParentID: unhealthy.ParentID}
+			}
+			return err
+		}
 
-			// get the connection string
-			// swallow the error, the resource got created and the connection string will be eventually available
-			connString, _ := s.getConnectionString(c, organizationID, branch)
-			return c.JSON(http.StatusCreated, storeToAPIBranchShortMetadata(branch, connString))
-		})
+		var analyticsEvent events.Event
+		switch payload := value.(type) {
+		case spec.BranchFromConfiguration:
+			analyticsEvent = events.NewBranchFromConfigurationEvent(
+				string(organizationID),
+				projectID,
+				branch.ID,
+				branch.Region,
+				string(payload.Configuration.Image),
+				payload.Configuration.InstanceType,
+				int(payload.Configuration.Replicas),
+				payload.Configuration.Storage,
+			)
+		case spec.BranchFromParent:
+			analyticsEvent = events.NewBranchFromParentEvent(string(organizationID), projectID, payload.ParentID, branch.ID, branch.Region)
+		}
+		s.analytics.Track(c.Request().Context(), analyticsEvent)
+
+		// get the connection string
+		// swallow the error, the resource got created and the connection string will be eventually available
+		connString, _ := s.getConnectionString(c, organizationID, branch)
+		return c.JSON(http.StatusCreated, storeToAPIBranchShortMetadata(branch, connString))
 	})
 }
 
