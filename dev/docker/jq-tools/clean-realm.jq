@@ -46,6 +46,10 @@ def restore_env_placeholders:
     elif .clientId == "mcp" then
       .secret = "$(env:MCP_CLIENT_SECRET)" |
       .redirectUris = ["$(env:MCP_REDIRECT_URI)"]
+    elif .clientId == "account" then
+      # Org-invite links are bound to the built-in account client; it needs the
+      # app origin as a valid redirect so /login-actions/restart validation passes.
+      .redirectUris = ["$(env:FRONTEND_REDIRECT_URI)", "/realms/xata/account/*"]
     # Turnstile configuration
     elif has("config") and .config.secret then
       .config.secret = "$(env:TURNSTILE_SECRET)" |
