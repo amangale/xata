@@ -931,8 +931,8 @@ func (s *handler) getResourcesByInstanceType(ctx context.Context, organizationID
 	}
 	for _, instance := range instanceTypes {
 		if instance.Name == name {
-			if maxAllowedInstanceType != 0 && instance.VCPUsLimit > maxAllowedInstanceType {
-				return "", "", "", fmt.Errorf("instance type %s exceeds the maximum allowed compute limit of %d millicores", name, maxAllowedInstanceType)
+			if maxAllowedInstanceType != 0 && instance.VCPUsRequest > maxAllowedInstanceType {
+				return "", "", "", fmt.Errorf("instance type %s is not available on your current plan; please add a payment method in your billing settings or contact support to enable larger instances", name)
 			}
 			return formatCPUResource(instance.VCPUsRequest), formatCPUResource(instance.VCPUsLimit), fmt.Sprintf("%dGi", instance.RAM), nil
 		}

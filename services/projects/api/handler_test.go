@@ -5780,6 +5780,87 @@ func TestGetBranchPostgresConfig(t *testing.T) {
 	}
 }
 
+func TestGetResourcesByInstanceType(t *testing.T) {
+	t.Parallel()
+
+	// Limit is meant to apply to VCPUsRequest (what we show users on the
+	// pricing page), not VCPUsLimit. xata.large has a request of 2000 and a
+	// limit of 4000, so a 2000-millicore ceiling must still allow it.
+	instanceTypes := []store.InstanceType{
+		{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1, Region: "us-east-1"},
+		{Name: "xata.large", VCPUsRequest: 2000, VCPUsLimit: 4000, RAM: 8, Region: "us-east-1"},
+		{Name: "xata.xlarge", VCPUsRequest: 4000, VCPUsLimit: 8000, RAM: 16, Region: "us-east-1"},
+	}
+
+	tests := map[string]struct {
+		name                   string
+		maxAllowedInstanceType int
+		wantCPURequest         string
+		wantCPULimit           string
+		wantMemory             string
+		wantErr                bool
+		wantErrContains        string
+	}{
+		"request at the limit is allowed": {
+			name:                   "xata.large",
+			maxAllowedInstanceType: 2000,
+			wantCPURequest:         "2",
+			wantCPULimit:           "4",
+			wantMemory:             "8Gi",
+		},
+		"request above the limit is rejected": {
+			name:                   "xata.xlarge",
+			maxAllowedInstanceType: 2000,
+			wantErr:                true,
+			wantErrContains:        "not available on your current plan",
+		},
+		"limit above ceiling but request below is allowed": {
+			// xata.large has VCPUsLimit 4000 > 4000? no, and request 2000 < 4000.
+			name:                   "xata.large",
+			maxAllowedInstanceType: 4000,
+			wantCPURequest:         "2",
+			wantCPULimit:           "4",
+			wantMemory:             "8Gi",
+		},
+		"zero ceiling disables enforcement": {
+			name:                   "xata.xlarge",
+			maxAllowedInstanceType: 0,
+			wantCPURequest:         "4",
+			wantCPULimit:           "8",
+			wantMemory:             "16Gi",
+		},
+		"unknown instance type errors": {
+			name:                   "xata.unknown",
+			maxAllowedInstanceType: 0,
+			wantErr:                true,
+			wantErrContains:        "is not found",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			mockStore := mocks.NewProjectsStore(t)
+			mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "us-east-1").Return(instanceTypes, nil)
+			h := &handler{store: mockStore}
+
+			cpuRequest, cpuLimit, memory, err := h.getResourcesByInstanceType(context.Background(), apitest.TestOrganization, "us-east-1", tc.name, tc.maxAllowedInstanceType)
+			if tc.wantErr {
+				require.Error(t, err)
+				if tc.wantErrContains != "" {
+					require.ErrorContains(t, err, tc.wantErrContains)
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.wantCPURequest, cpuRequest)
+			require.Equal(t, tc.wantCPULimit, cpuLimit)
+			require.Equal(t, tc.wantMemory, memory)
+		})
+	}
+}
+
 func TestListInstanceTypes(t *testing.T) {
 	t.Parallel()
 

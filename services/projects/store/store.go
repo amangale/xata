@@ -53,7 +53,7 @@ var tierDefaults = map[UsageTier]map[LimitKey]int{
 		LimitMaxBranchesPerHour:     50,
 		LimitMaxProjects:            100,
 		LimitMaxProjectsPerHour:     20,
-		LimitMaxAllowedInstanceType: 8000,
+		LimitMaxAllowedInstanceType: 32000, // xata.8xlarge, the largest instance type
 	},
 }
 
