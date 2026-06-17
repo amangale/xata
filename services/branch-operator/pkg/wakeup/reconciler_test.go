@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"xata/internal/envtestutil"
 	poolv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
 	"xata/services/branch-operator/api/v1alpha1"
 
@@ -50,7 +51,8 @@ func TestWakeupReconciler(t *testing.T) {
 
 		// Create a Branch with pool annotation and no cluster name
 		branch, err := createBranch(ctx, branchName, map[string]string{
-			v1alpha1.WakeupPoolAnnotation: poolName,
+			v1alpha1.WakeupPoolAnnotation:     poolName,
+			v1alpha1.AwaitingWakeupAnnotation: "true",
 		})
 		require.NoError(t, err)
 
@@ -61,7 +63,9 @@ func TestWakeupReconciler(t *testing.T) {
 		// Expect the WakeupRequest to complete successfully
 		requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionTrue, v1alpha1.WakeupSucceededReason)
 
-		// Expect the Branch to have a cluster name assigned
+		// Expect the Branch to have:
+		// * A cluster name assigned
+		// * The awaiting wakeup annotation removed
 		requireEventuallyTrue(t, func() bool {
 			br := &v1alpha1.Branch{}
 			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(branch), br)
@@ -69,7 +73,9 @@ func TestWakeupReconciler(t *testing.T) {
 				return false
 			}
 
-			return br.Spec.ClusterSpec.Name != nil
+			_, hasAnnotation := br.Annotations[v1alpha1.AwaitingWakeupAnnotation]
+
+			return br.Spec.ClusterSpec.Name != nil && !hasAnnotation
 		})
 
 		// Expect the Cluster to no longer have the pool's controller owner
@@ -93,6 +99,49 @@ func TestWakeupReconciler(t *testing.T) {
 			}
 
 			return pv.Annotations[v1alpha1.AwokenByXVolAnnotation] == "xvol-"+branchName
+		})
+	})
+
+	t.Run("removes awaiting wakeup annotation when the branch already has a cluster", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		branchName := "branch-" + randomString(10)
+		wrName := "wur-" + randomString(10)
+		clusterName := "cluster-" + randomString(10)
+
+		// Create a Branch that carries the awaiting wakeup annotation
+		branch, err := createBranch(ctx, branchName, map[string]string{
+			v1alpha1.AwaitingWakeupAnnotation: "true",
+		})
+		require.NoError(t, err)
+
+		// Set the cluster name on the branch to simulate a prior reconcile that
+		// assigned the cluster but failed to remove the awaiting wakeup annotation
+		err = envtestutil.RetryOnConflict(ctx, k8sClient, branch, func(b *v1alpha1.Branch) {
+			b.Spec.ClusterSpec.Name = new(clusterName)
+		})
+		require.NoError(t, err)
+
+		// Create a WakeupRequest for the already-woken branch
+		wr, err := createWakeupRequest(ctx, wrName, branch.Name)
+		require.NoError(t, err)
+
+		// Expect the WakeupRequest to complete successfully
+		requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionTrue, v1alpha1.WakeupSucceededReason)
+
+		// Expect the Branch to retain its cluster name and have the awaiting
+		// wakeup annotation removed
+		requireEventuallyTrue(t, func() bool {
+			br := &v1alpha1.Branch{}
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(branch), br)
+			if err != nil {
+				return false
+			}
+
+			_, hasAnnotation := br.Annotations[v1alpha1.AwaitingWakeupAnnotation]
+
+			return br.Spec.ClusterSpec.Name != nil && !hasAnnotation
 		})
 	})
 

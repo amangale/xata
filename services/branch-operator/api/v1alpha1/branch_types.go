@@ -320,8 +320,9 @@ const (
 	HibernationModeEnabled  HibernationMode = "Enabled"
 	HibernationModeDisabled HibernationMode = "Disabled"
 
-	WakeupPoolAnnotation   = "xata.io/wakeup-pool"
-	AwokenByXVolAnnotation = "xata.io/awoken-by-xvol"
+	WakeupPoolAnnotation     = "xata.io/wakeup-pool"
+	AwokenByXVolAnnotation   = "xata.io/awoken-by-xvol"
+	AwaitingWakeupAnnotation = "xata.io/awaiting-wakeup"
 )
 
 // IsEnabled returns true if hibernation mode is enabled
@@ -340,6 +341,13 @@ func (b *Branch) HasWakeupPoolAnnotation() bool {
 // annotations. If the annotation is not present, an empty string is returned.
 func (b *Branch) WakeupPoolName() string {
 	return b.Annotations[WakeupPoolAnnotation]
+}
+
+// HasAwaitingWakeupAnnotation returns true if the Branch has the awaiting
+// wakeup annotation
+func (b *Branch) HasAwaitingWakeupAnnotation() bool {
+	_, ok := b.Annotations[AwaitingWakeupAnnotation]
+	return ok
 }
 
 type WALArchivingMode string

@@ -109,10 +109,17 @@ func (r *WakeupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// If the branch doesn't need to be woken up (ie it already has a cluster
-	// assigned) then just set the Succeeded condition to True and skip further
-	// reconciliation.
+	// assigned) then:
+	// * set the Succeeded condition to True
+	// * ensure the awaiting wakeup annotation is removed from the branch
+	// * requeue the WakeupRequest for deletion after its TTL expires
 	if branch.Spec.ClusterSpec.Name != nil {
 		err = r.setSucceededCondition(ctx, wr, metav1.ConditionTrue, v1alpha1.WakeupSucceededReason)
+		if err != nil {
+			return ctrl.Result{}, ignoreTerminal(err)
+		}
+
+		err = r.removeAwaitingWakeupAnnotation(ctx, branch)
 		if err != nil {
 			return ctrl.Result{}, ignoreTerminal(err)
 		}
@@ -183,6 +190,13 @@ func (r *WakeupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	err = r.assignClusterToBranch(ctx, branch, cluster.Name)
 	if err != nil {
 		log.Error(err, "assigning cluster to Branch", "branchName", branch.Name)
+		return ctrl.Result{}, ignoreTerminal(err)
+	}
+
+	// Remove the awaiting wakeup annotation from the branch
+	err = r.removeAwaitingWakeupAnnotation(ctx, branch)
+	if err != nil {
+		log.Error(err, "removing awaiting wakeup annotation", "branchName", branch.Name)
 		return ctrl.Result{}, ignoreTerminal(err)
 	}
 

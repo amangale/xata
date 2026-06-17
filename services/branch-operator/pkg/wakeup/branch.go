@@ -8,6 +8,7 @@ import (
 	v1alpha1ac "xata/services/branch-operator/applyconfiguration/api/v1alpha1"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -63,6 +64,19 @@ func (r *WakeupReconciler) assignClusterToBranch(ctx context.Context, branch *v1
 
 	// Apply the Branch spec update using SSA
 	err := r.Apply(ctx, ac, client.FieldOwner(ReconcilerName), client.ForceOwnership)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// removeAwaitingWakeupAnnotation removes the awaiting wakeup annotation from
+// the Branch resource
+func (r *WakeupReconciler) removeAwaitingWakeupAnnotation(ctx context.Context, branch *v1alpha1.Branch) error {
+	patch := fmt.Appendf(nil, `{"metadata":{"annotations":{%q:null}}}`, v1alpha1.AwaitingWakeupAnnotation)
+
+	err := r.Patch(ctx, branch, client.RawPatch(types.MergePatchType, patch))
 	if err != nil {
 		return err
 	}

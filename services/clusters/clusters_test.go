@@ -218,7 +218,10 @@ func TestCreatePostgresCluster(t *testing.T) {
 				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "max_connections", "100")
 				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "shared_buffers", "128MB")
 				b.Spec.ClusterSpec.Postgres.SharedPreloadLibraries = []string{"xatautils", "pg_stat_statements"}
-				b.Annotations = map[string]string{v1alpha1.WakeupPoolAnnotation: "test-pool"}
+				b.Annotations = map[string]string{
+					v1alpha1.WakeupPoolAnnotation:     "test-pool",
+					v1alpha1.AwaitingWakeupAnnotation: "true",
+				}
 			},
 			wantWUR: true,
 		},
@@ -695,6 +698,43 @@ func TestUpdatePostgresCluster(t *testing.T) {
 			expectedBranchFn: func(b *v1alpha1.Branch) {
 				b.Spec.ClusterSpec.Name = nil
 				b.Spec.ClusterSpec.Hibernation = nil
+				b.Annotations = map[string]string{
+					v1alpha1.WakeupPoolAnnotation: "test-pool",
+				}
+			},
+		},
+		{
+			name: "hibernate with wakeup-pool annotation removes a stale awaiting-wakeup annotation",
+			inputBranchFn: func(b *v1alpha1.Branch) {
+				b.Annotations = map[string]string{
+					v1alpha1.WakeupPoolAnnotation:     "test-pool",
+					v1alpha1.AwaitingWakeupAnnotation: "true",
+				}
+			},
+			requestFn: func(r *clustersv1.UpdatePostgresClusterRequest) {
+				r.UpdateConfiguration.Hibernate = new(true)
+			},
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.Name = nil
+				b.Spec.ClusterSpec.Hibernation = nil
+				b.Annotations = map[string]string{
+					v1alpha1.WakeupPoolAnnotation: "test-pool",
+				}
+			},
+		},
+		{
+			name: "wake with wakeup-pool annotation adds the awaiting-wakeup annotation",
+			inputBranchFn: func(b *v1alpha1.Branch) {
+				b.Annotations = map[string]string{
+					v1alpha1.WakeupPoolAnnotation: "test-pool",
+				}
+			},
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.Hibernation = nil
+				b.Annotations = map[string]string{
+					v1alpha1.WakeupPoolAnnotation:     "test-pool",
+					v1alpha1.AwaitingWakeupAnnotation: "true",
+				}
 			},
 		},
 		{
@@ -816,6 +856,8 @@ func TestUpdatePostgresCluster(t *testing.T) {
 
 				require.Equal(t, expectedBranch.Spec, br.Spec)
 				require.Equal(t, expectedBranch.Labels, br.Labels)
+				require.Equal(t, expectedBranch.Annotations, br.Annotations)
+
 			}
 		})
 	}
@@ -1138,6 +1180,26 @@ func TestDescribePostgresCluster(t *testing.T) {
 				resp.Status = &clustersv1.ClusterStatus{
 					Status:     apiv1.PhaseHealthy,
 					StatusType: clustersv1.ClusterStatus_STATUS_TYPE_HIBERNATED,
+				}
+				return resp
+			}(),
+		},
+		{
+			name: "branch awaiting wakeup",
+			existingObjects: func() []client.Object {
+				_, branch, _, _, _ := exampleRequestsAndBranches()
+				branch.Annotations = map[string]string{
+					v1alpha1.AwaitingWakeupAnnotation: "true",
+				}
+				branch.Spec.ClusterSpec.Name = nil
+				return []client.Object{branch}
+			},
+			requestID: "lsmevenv7t3l56euo1v9bh3b74",
+			wantResp: func() *clustersv1.DescribePostgresClusterResponse {
+				_, _, resp, _, _ := exampleRequestsAndBranches()
+				resp.Status = &clustersv1.ClusterStatus{
+					Status:     apiv1.PhaseHealthy,
+					StatusType: clustersv1.ClusterStatus_STATUS_TYPE_TRANSIENT,
 				}
 				return resp
 			}(),

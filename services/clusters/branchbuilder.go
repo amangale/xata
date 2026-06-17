@@ -119,6 +119,7 @@ func (b *BranchBuilder) WithOverridesFromParent(parent *v1alpha1.Branch) *Branch
 
 	// If the parent branch has a wakeup pool annotation:
 	// * Annotate the child with the same wakeup pool annotation
+	// * Annotate the child with an "awaiting wakeup" annotation
 	// * Upgrade the restore type from VolumeSnapshot to XVolClone
 	// * Clear the cluster name from the child Branch
 	if parent.HasWakeupPoolAnnotation() {
@@ -126,6 +127,7 @@ func (b *BranchBuilder) WithOverridesFromParent(parent *v1alpha1.Branch) *Branch
 			b.branch.Annotations = make(map[string]string)
 		}
 		b.branch.Annotations[v1alpha1.WakeupPoolAnnotation] = parent.Annotations[v1alpha1.WakeupPoolAnnotation]
+		b.branch.Annotations[v1alpha1.AwaitingWakeupAnnotation] = "true"
 		b.branch.Spec.Restore.Type = v1alpha1.RestoreTypeXVolClone
 		b.branch.Spec.ClusterSpec.Name = nil
 	}
@@ -156,6 +158,7 @@ func (b *BranchBuilder) WithUpdatesFrom(req *clustersv1.UpdatePostgresClusterReq
 			if b.branch.HasWakeupPoolAnnotation() {
 				b.branch.Spec.ClusterSpec.Hibernation = nil
 				b.branch.Spec.ClusterSpec.Name = nil
+				delete(b.branch.Annotations, v1alpha1.AwaitingWakeupAnnotation)
 			} else {
 				b.branch.Spec.ClusterSpec.Hibernation = ptr.To(v1alpha1.HibernationModeEnabled)
 			}
@@ -164,6 +167,7 @@ func (b *BranchBuilder) WithUpdatesFrom(req *clustersv1.UpdatePostgresClusterReq
 		} else {
 			if b.branch.HasWakeupPoolAnnotation() {
 				b.branch.Spec.ClusterSpec.Hibernation = nil
+				b.branch.Annotations[v1alpha1.AwaitingWakeupAnnotation] = "true"
 			} else {
 				b.branch.Spec.ClusterSpec.Hibernation = ptr.To(v1alpha1.HibernationModeDisabled)
 			}
