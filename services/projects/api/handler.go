@@ -638,7 +638,7 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 		log.Ctx(ctx).Info().Bool("usePgBackRest", usePgBackRest).Msg("pgbackrest feature flag")
 
 		claims := api.GetUserClaims(c)
-		orgLimits, err := s.resolveOrgLimits(ctx, claims.Organizations[string(organizationID)].UsageTier, string(organizationID), useXatastor)
+		orgLimits, err := s.resolveOrgLimits(ctx, claims.Organizations[string(organizationID)].UsageTier, string(organizationID), projectID, useXatastor)
 		if err != nil {
 			return err
 		}
@@ -1255,7 +1255,7 @@ func (s *handler) UpdateBranch(c echo.Context, organizationID spec.OrganizationI
 		}
 
 		claims := api.GetUserClaims(c)
-		orgLimits, err := s.resolveOrgLimits(c.Request().Context(), claims.Organizations[organizationID].UsageTier, string(organizationID), s.feat.BoolValue(c.Request().Context(), flags.UseXatastor))
+		orgLimits, err := s.resolveOrgLimits(c.Request().Context(), claims.Organizations[organizationID].UsageTier, string(organizationID), projectID, s.feat.BoolValue(c.Request().Context(), flags.UseXatastor))
 		if err != nil {
 			return err
 		}
@@ -1631,12 +1631,27 @@ func (s *handler) DeleteBranch(c echo.Context, organizationID spec.OrganizationI
 	})
 }
 
-// GetProjectLimits returns the effective resource limits for a project
+// GetProjectLimits returns the effective resource limits for a project, applying
+// tier defaults, per-organization overrides and per-project overrides, in
+// increasing order of precedence.
 // (GET /organizations/{organizationID}/projects/{projectID}/limits)
 func (s *handler) GetProjectLimits(c echo.Context, organizationID spec.OrganizationID, projectID string) error {
 	return s.withOrganizationAccess(c, organizationID, All, func() error {
 		return s.withProject(c, organizationID, projectID, func(_ *store.Project) error {
-			return echo.ErrNotImplemented
+			ctx := c.Request().Context()
+			claims := api.GetUserClaims(c)
+			limits, err := s.resolveOrgLimits(ctx, claims.Organizations[string(organizationID)].UsageTier, string(organizationID), projectID, s.feat.BoolValue(ctx, flags.UseXatastor))
+			if err != nil {
+				return err
+			}
+			return c.JSON(http.StatusOK, spec.EffectiveProjectLimits{
+				MaxDescriptionLength:   limits.MaxDescriptionLength,
+				MaxBranchesPerProject:  limits.MaxBranchesPerProject,
+				MaxInstancesPerBranch:  limits.MaxInstancesPerBranch,
+				MinInstancesPerBranch:  limits.MinInstancesPerBranch,
+				MaxAllowedInstanceType: limits.MaxAllowedInstanceType,
+				MaxBranchesPerHour:     limits.MaxBranchesPerHour,
+			})
 		})
 	})
 }
@@ -1656,9 +1671,10 @@ func (s *handler) GetDefaultProjectLimits(c echo.Context, organizationID spec.Or
 
 // resolveOrgLimits returns the effective limits for an organization, applying tier
 // defaults and any per-org overrides from the DB. T1 orgs skip the DB lookup.
-// For T2 orgs with the UseXatastor flag enabled, the three branch-count limits
-// use xatastor-specific defaults before DB overrides are applied.
-func (s *handler) resolveOrgLimits(ctx context.Context, usageTier, organizationID string, useXatastor bool) (spec.OrganizationLimits, error) {
+// When projectID is non-empty, project-level overrides take precedence over
+// org-level ones. For T2 orgs with the UseXatastor flag enabled, the three
+// branch-count limits use xatastor-specific defaults before DB overrides are applied.
+func (s *handler) resolveOrgLimits(ctx context.Context, usageTier, organizationID, projectID string, useXatastor bool) (spec.OrganizationLimits, error) {
 	tier := orgTier(ctx, usageTier)
 	def := func(key store.LimitKey) int { return store.TierDefaultInt(tier, key, 0) }
 
@@ -1666,7 +1682,7 @@ func (s *handler) resolveOrgLimits(ctx context.Context, usageTier, organizationI
 	var overrides map[store.LimitKey]any
 	if tier != store.TierT1 {
 		var err error
-		overrides, err = s.store.GetOrgLimits(ctx, organizationID, "")
+		overrides, err = s.store.GetOrgLimits(ctx, organizationID, projectID)
 		if err != nil {
 			return spec.OrganizationLimits{}, fmt.Errorf("get org limits: %w", err)
 		}
@@ -1701,7 +1717,7 @@ func (s *handler) resolveOrgLimits(ctx context.Context, usageTier, organizationI
 func (s *handler) GetOrganizationLimits(c echo.Context, organizationID spec.OrganizationID) error {
 	return s.withOrganizationAccess(c, organizationID, All, func() error {
 		claims := api.GetUserClaims(c)
-		limits, err := s.resolveOrgLimits(c.Request().Context(), claims.Organizations[organizationID].UsageTier, string(organizationID), s.feat.BoolValue(c.Request().Context(), flags.UseXatastor))
+		limits, err := s.resolveOrgLimits(c.Request().Context(), claims.Organizations[organizationID].UsageTier, string(organizationID), "", s.feat.BoolValue(c.Request().Context(), flags.UseXatastor))
 		if err != nil {
 			return err
 		}
@@ -1861,7 +1877,7 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 
 		claims := api.GetUserClaims(c)
 		useXatastor := s.feat.BoolValue(ctx, flags.UseXatastor)
-		orgLimits, err := s.resolveOrgLimits(ctx, claims.Organizations[string(organizationID)].UsageTier, string(organizationID), useXatastor)
+		orgLimits, err := s.resolveOrgLimits(ctx, claims.Organizations[string(organizationID)].UsageTier, string(organizationID), projectID, useXatastor)
 		if err != nil {
 			return err
 		}
