@@ -33,23 +33,18 @@ def restore_env_placeholders:
       .config.clientId = "$(env:GOOGLE_OAUTH_CLIENT_ID)" |
       .config.clientSecret = "$(env:GOOGLE_OAUTH_SECRET)"
     # Client configurations
-    elif .clientId == "website" then
-      .secret = "$(env:WEBSITE_CLIENT_SECRET)" |
-      .redirectUris = ["$(env:WEBSITE_REDIRECT_URI)"]
     elif .clientId == "cli" then
       .secret = "$(env:XATA_CLI_CLIENT_SECRET)"
     elif .clientId == "frontend" then
       .secret = "$(env:FRONTEND_CLIENT_SECRET)" |
       .redirectUris = ["$(env:FRONTEND_REDIRECT_URI)"] |
       .webOrigins = ["$(env:FRONTEND_WEB_ORIGIN_URL)"] |
-      .attributes["post.logout.redirect.uris"] = "$(env:FRONTEND_POST_LOGOUT_REDIRECT_URI)"
-    elif .clientId == "mcp" then
-      .secret = "$(env:MCP_CLIENT_SECRET)" |
-      .redirectUris = ["$(env:MCP_REDIRECT_URI)"]
+      .attributes["post.logout.redirect.uris"] = "$(env:FRONTEND_APP_REDIRECT_URI)"
     elif .clientId == "account" then
-      # Org-invite links are bound to the built-in account client; it needs the
-      # app origin as a valid redirect so /login-actions/restart validation passes.
-      .redirectUris = ["$(env:FRONTEND_REDIRECT_URI)", "/realms/xata/account/*"]
+      # Org-invite links omit redirect_uri, so Keycloak requires EXACTLY ONE redirect
+      # URI on the account client, scoped to the app origin. When invites are not bound
+      # to the account OAuth client we can revert and set it to "/realms/xata/account/*"
+      .redirectUris = ["$(env:FRONTEND_APP_REDIRECT_URI)"]
     # Turnstile configuration
     elif has("config") and .config.secret then
       .config.secret = "$(env:TURNSTILE_SECRET)" |
