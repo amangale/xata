@@ -34,6 +34,7 @@ type ClusterServicePayload struct {
 //go:generate go run github.com/vektra/mockery/v3 --output mocks --outpkg mocks --with-expecter --name Provisioner
 type Provisioner interface {
 	CreateBranch(ctx context.Context, projectID, organizationID, name string, payload *ClusterServicePayload) (*store.Branch, error)
+	DeleteBranch(ctx context.Context, organizationID, projectID, branchID string) error
 }
 
 type BranchProvisioner struct {
@@ -48,13 +49,13 @@ func NewBranchProvisioner(store store.ProjectsStore, cells cells.Cells) *BranchP
 	}
 }
 
-func (o *BranchProvisioner) CreateBranch(ctx context.Context, projectID, organizationID, name string, payload *ClusterServicePayload) (*store.Branch, error) {
-	project, err := o.store.GetProject(ctx, organizationID, projectID)
+func (p *BranchProvisioner) CreateBranch(ctx context.Context, projectID, organizationID, name string, payload *ClusterServicePayload) (*store.Branch, error) {
+	project, err := p.store.GetProject(ctx, organizationID, projectID)
 	if err != nil {
 		return nil, err
 	}
 
-	branch, err := o.store.CreateBranch(ctx, organizationID, projectID, payload.CellID, &store.CreateBranchConfiguration{
+	branch, err := p.store.CreateBranch(ctx, organizationID, projectID, payload.CellID, &store.CreateBranchConfiguration{
 		Name:                  name,
 		ParentID:              payload.ParentID,
 		Description:           payload.Description,
@@ -89,7 +90,7 @@ func (o *BranchProvisioner) CreateBranch(ctx context.Context, projectID, organiz
 			}
 		}
 
-		client, err := o.cells.GetCellConnection(ctx, organizationID, payload.CellID)
+		client, err := p.cells.GetCellConnection(ctx, organizationID, payload.CellID)
 		if err != nil {
 			return err
 		}
@@ -100,7 +101,7 @@ func (o *BranchProvisioner) CreateBranch(ctx context.Context, projectID, organiz
 			return err
 		}
 
-		return o.setupBranchOnPrimaryCell(ctx, organizationID, payload.Region, payload.CellID, branch.ID, project)
+		return p.setupBranchOnPrimaryCell(ctx, organizationID, payload.Region, payload.CellID, branch.ID, project)
 	})
 	if err != nil {
 		st, _ := status.FromError(err)
@@ -118,10 +119,16 @@ func (o *BranchProvisioner) CreateBranch(ctx context.Context, projectID, organiz
 	return branch, nil
 }
 
+func (p *BranchProvisioner) DeleteBranch(ctx context.Context, organizationID, projectID, branchID string) error {
+	return p.store.DeleteBranch(ctx, organizationID, projectID, branchID, func(branch *store.Branch) error {
+		return cells.DeprovisionBranch(ctx, organizationID, p.store, p.cells, branch)
+	})
+}
+
 // setupBranchOnPrimaryCell registers a cluster with the primary cell if it was
 // created on a secondary cell, and applies IP filtering settings from the project.
-func (o *BranchProvisioner) setupBranchOnPrimaryCell(ctx context.Context, organizationID, region, cellID, branchID string, project *store.Project) error {
-	primaryCell, err := o.store.GetPrimaryCell(ctx, organizationID, region)
+func (p *BranchProvisioner) setupBranchOnPrimaryCell(ctx context.Context, organizationID, region, cellID, branchID string, project *store.Project) error {
+	primaryCell, err := p.store.GetPrimaryCell(ctx, organizationID, region)
 	if err != nil {
 		return err
 	}
@@ -133,7 +140,7 @@ func (o *BranchProvisioner) setupBranchOnPrimaryCell(ctx context.Context, organi
 		return nil
 	}
 
-	client, err := o.cells.GetCellConnection(ctx, organizationID, primaryCell.ID)
+	client, err := p.cells.GetCellConnection(ctx, organizationID, primaryCell.ID)
 	if err != nil {
 		return err
 	}

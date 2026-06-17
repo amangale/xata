@@ -618,9 +618,10 @@ func TestAuthDisabledOrg(t *testing.T) {
 	noWriteAccessOrgID := apitest.TestOrganizationDisabled
 	mockStore := mocks.NewProjectsStore(t)
 	mockAnalytics := analyticsmocks.NewClient(t)
+	mockProvisioner := provisionermocks.NewProvisioner(t)
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, mockAnalytics, nil, nil, nil)
+	handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, mockAnalytics, nil, nil, mockProvisioner)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaimsDisabled)
 
 	wantErr := ErrorOrganizationDisabled{OrganizationID: noWriteAccessOrgID}
@@ -647,7 +648,7 @@ func TestAuthDisabledOrg(t *testing.T) {
 
 	// DELETEs should still work
 	mockStore.EXPECT().DeleteProject(c.Request().Context(), noWriteAccessOrgID, "test").Return(nil)
-	mockStore.EXPECT().DeleteBranch(c.Request().Context(), noWriteAccessOrgID, "test", "branch", mock.Anything).Return(nil)
+	mockProvisioner.EXPECT().DeleteBranch(mock.Anything, noWriteAccessOrgID, "test", "branch").Return(nil)
 	mockStore.EXPECT().DeleteGithubRepoMapping(c.Request().Context(), noWriteAccessOrgID, "test").Return(nil)
 	mockAnalytics.EXPECT().Track(mock.Anything, mock.Anything)
 	assert.NoError(t, handler.DeleteProject(c, noWriteAccessOrgID, "test"))
@@ -5196,128 +5197,67 @@ func TestUpdateBranch(t *testing.T) {
 
 func TestDeleteBranch(t *testing.T) {
 	mockStore := mocks.NewProjectsStore(t)
-	mockClusters := protomocks.NewClustersServiceClient(t)
-	mockCells := cellsmock.NewCellsMock(t, mockClusters)
+	mockProvisioner := provisionermocks.NewProvisioner(t)
 
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 	mockAnalytics := analyticsmocks.NewClient(t)
-	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "", nil, sched, mockAnalytics, nil, nil, nil)
+	apiHandler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, mockAnalytics, nil, nil, mockProvisioner)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
-	branch := store.Branch{
-		ID:     "123",
-		Name:   "test",
-		CellID: "primary_cell",
-		Region: "test-region",
-	}
-
-	secondaryBranch := store.Branch{
-		ID:     "456",
-		Name:   "test-secondary",
-		CellID: "secondary_cell",
-		Region: "test-region",
-	}
-
-	deleteBranchTests := []struct {
-		name                          string
-		projectID                     string
-		branchID                      string
-		wantError                     bool
-		expectedError                 string
-		deleteBranchCall              *mocks.ProjectsStore_DeleteBranch_Call
-		deletePostgresClusterCall     *protomocks.ClustersServiceClient_DeletePostgresCluster_Call
-		getPrimaryCellCall            *mocks.ProjectsStore_GetPrimaryCell_Call
-		deregisterPostgresClusterCall *protomocks.ClustersServiceClient_DeregisterPostgresCluster_Call
+	deleteBranchTests := map[string]struct {
+		projectID     string
+		branchID      string
+		setupMocks    func()
+		wantError     bool
+		expectedError string
 	}{
-		{
-			name:      "delete branch works",
-			projectID: "project_id",
-			branchID:  branch.ID,
-			wantError: false,
-			deleteBranchCall: mockStore.EXPECT().DeleteBranch(mock.Anything, apitest.TestOrganization, "project_id", branch.ID, mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchName string, deprovisionFn func(*store.Branch) error) {
-				err := deprovisionFn(&branch)
-				assert.Nil(t, err)
-			}).Return(nil),
-			deletePostgresClusterCall: mockClusters.EXPECT().DeletePostgresCluster(mock.Anything, &clustersv1.DeletePostgresClusterRequest{Id: branch.ID}).Return(&clustersv1.DeletePostgresClusterResponse{}, nil),
-			getPrimaryCellCall:        mockStore.EXPECT().GetPrimaryCell(mock.Anything, apitest.TestOrganization, "test-region").Return(&store.Cell{ID: "primary_cell", RegionID: "test-region", Primary: true}, nil),
-		},
-		{
-			name:          "delete branch fails for storage error",
-			projectID:     "project_id",
-			branchID:      "123",
-			wantError:     true,
-			expectedError: fmt.Errorf("some error").Error(),
-			deleteBranchCall: mockStore.EXPECT().DeleteBranch(mock.Anything, apitest.TestOrganization, "project_id", branch.ID, mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchName string, deprovisionFn func(*store.Branch) error) {
-				err := deprovisionFn(&branch)
-				assert.Nil(t, err)
-			}).Return(fmt.Errorf("some error")),
-			deletePostgresClusterCall: mockClusters.EXPECT().DeletePostgresCluster(mock.Anything, &clustersv1.DeletePostgresClusterRequest{Id: branch.ID}).Return(&clustersv1.DeletePostgresClusterResponse{}, nil),
-			getPrimaryCellCall:        mockStore.EXPECT().GetPrimaryCell(mock.Anything, apitest.TestOrganization, "test-region").Return(&store.Cell{ID: "primary_cell", RegionID: "test-region", Primary: true}, nil),
-		},
-		{
-			name:          "delete branch fails for infra error",
-			projectID:     "project_id",
-			branchID:      "123",
-			wantError:     true,
-			expectedError: fmt.Errorf("some cluster error").Error(),
-			deleteBranchCall: mockStore.EXPECT().DeleteBranch(mock.Anything, apitest.TestOrganization, "project_id", "123", mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchName string, deprovisionFn func(*store.Branch) error) {
-				err := deprovisionFn(&branch)
-				assert.Error(t, err)
-			}).Return(fmt.Errorf("some cluster error")),
-			deletePostgresClusterCall: mockClusters.EXPECT().DeletePostgresCluster(mock.Anything, &clustersv1.DeletePostgresClusterRequest{Id: "123"}).Return(nil, fmt.Errorf("some cluster error")),
-		},
-		{
-			name:      "delete branch succeeds when cluster not found in kubernetes",
+		"delete branch works": {
 			projectID: "project_id",
 			branchID:  "123",
-			wantError: false,
-			deleteBranchCall: mockStore.EXPECT().DeleteBranch(mock.Anything, apitest.TestOrganization, "project_id", "123", mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchName string, deprovisionFn func(*store.Branch) error) {
-				err := deprovisionFn(&branch)
-				assert.Nil(t, err)
-			}).Return(nil),
-			deletePostgresClusterCall: mockClusters.EXPECT().DeletePostgresCluster(mock.Anything, &clustersv1.DeletePostgresClusterRequest{Id: "123"}).Return(nil, clusters.ClusterNotFoundError("123")),
-			getPrimaryCellCall:        mockStore.EXPECT().GetPrimaryCell(mock.Anything, apitest.TestOrganization, "test-region").Return(&store.Cell{ID: "primary_cell", RegionID: "test-region", Primary: true}, nil),
+			setupMocks: func() {
+				mockProvisioner.EXPECT().DeleteBranch(mock.Anything, apitest.TestOrganization, "project_id", "123").Return(nil).Once()
+				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchDeletedEvent(apitest.TestOrganization, "project_id", "123")).Return().Once()
+			},
 		},
-		{
-			name:      "delete branch from secondary cell works",
+		"delete branch fails for storage error": {
 			projectID: "project_id",
-			branchID:  secondaryBranch.ID,
-			wantError: false,
-			deleteBranchCall: mockStore.EXPECT().DeleteBranch(mock.Anything, apitest.TestOrganization, "project_id", secondaryBranch.ID, mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchName string, deprovisionFn func(*store.Branch) error) {
-				err := deprovisionFn(&secondaryBranch)
-				assert.Nil(t, err)
-			}).Return(nil),
-			deletePostgresClusterCall:     mockClusters.EXPECT().DeletePostgresCluster(mock.Anything, &clustersv1.DeletePostgresClusterRequest{Id: secondaryBranch.ID}).Return(&clustersv1.DeletePostgresClusterResponse{}, nil),
-			getPrimaryCellCall:            mockStore.EXPECT().GetPrimaryCell(mock.Anything, apitest.TestOrganization, "test-region").Return(&store.Cell{ID: "primary_cell", RegionID: "test-region", Primary: true}, nil),
-			deregisterPostgresClusterCall: mockClusters.EXPECT().DeregisterPostgresCluster(mock.Anything, &clustersv1.DeregisterPostgresClusterRequest{Id: secondaryBranch.ID}).Return(&clustersv1.DeregisterPostgresClusterResponse{}, nil),
+			branchID:  "123",
+			setupMocks: func() {
+				mockProvisioner.EXPECT().DeleteBranch(mock.Anything, apitest.TestOrganization, "project_id", "123").Return(fmt.Errorf("some error")).Once()
+			},
+			wantError:     true,
+			expectedError: "some error",
+		},
+		"delete branch fails for infra error": {
+			projectID: "project_id",
+			branchID:  "123",
+			setupMocks: func() {
+				mockProvisioner.EXPECT().DeleteBranch(mock.Anything, apitest.TestOrganization, "project_id", "123").Return(fmt.Errorf("some cluster error")).Once()
+			},
+			wantError:     true,
+			expectedError: "some cluster error",
+		},
+		"delete branch fails with not found maps to handler error": {
+			projectID: "project_id",
+			branchID:  "123",
+			setupMocks: func() {
+				mockProvisioner.EXPECT().DeleteBranch(mock.Anything, apitest.TestOrganization, "project_id", "123").Return(status.Error(codes.NotFound, "not found")).Once()
+			},
+			wantError:     true,
+			expectedError: ErrorBranchNotFound{BranchID: "123"}.Error(),
 		},
 	}
-	for _, tt := range deleteBranchTests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.deleteBranchCall != nil {
-				tt.deleteBranchCall.Once()
-			}
-			if tt.deletePostgresClusterCall != nil {
-				tt.deletePostgresClusterCall.Once()
-			}
-			if tt.getPrimaryCellCall != nil {
-				tt.getPrimaryCellCall.Once()
-			}
-			if tt.deregisterPostgresClusterCall != nil {
-				tt.deregisterPostgresClusterCall.Once()
-			}
-			mockClusters.EXPECT().DeleteBranchIPFiltering(mock.Anything, mock.Anything).Return(nil, nil).Maybe()
-			if !tt.wantError {
-				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchDeletedEvent(apitest.TestOrganization, tt.projectID, tt.branchID)).Return().Once()
-			}
+	for name, tt := range deleteBranchTests {
+		t.Run(name, func(t *testing.T) {
+			tt.setupMocks()
 			c, rec := e.DELETE("/organizations/" + apitest.TestOrganization + "/projects/" + tt.projectID + "/branches/" + tt.branchID).Context()
 			err := apiHandler.DeleteBranch(c, apitest.TestOrganization, tt.projectID, tt.branchID)
 			if tt.wantError {
-				assert.Error(t, err)
-				assert.Equal(t, tt.expectedError, err.Error())
+				require.Error(t, err)
+				require.Equal(t, tt.expectedError, err.Error())
 			} else {
-				assert.Nil(t, err)
+				require.NoError(t, err)
 				rec.MustCode(http.StatusNoContent)
 			}
 		})

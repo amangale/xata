@@ -74,6 +74,46 @@ func (_c *Provisioner_CreateBranch_Call) Return(_a0 *store.Branch, _a1 error) *P
 	return _c
 }
 
+// DeleteBranch provides a mock function with given fields: ctx, organizationID, projectID, branchID
+func (_m *Provisioner) DeleteBranch(ctx context.Context, organizationID string, projectID string, branchID string) error {
+	ret := _m.Called(ctx, organizationID, projectID, branchID)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
+		r0 = rf(ctx, organizationID, projectID, branchID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Provisioner_DeleteBranch_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteBranch'
+type Provisioner_DeleteBranch_Call struct {
+	*mock.Call
+}
+
+// DeleteBranch is a helper method to define mock.On call
+//   - ctx context.Context
+//   - organizationID string
+//   - projectID string
+//   - branchID string
+func (_e *Provisioner_Expecter) DeleteBranch(ctx interface{}, organizationID interface{}, projectID interface{}, branchID interface{}) *Provisioner_DeleteBranch_Call {
+	return &Provisioner_DeleteBranch_Call{Call: _e.mock.On("DeleteBranch", ctx, organizationID, projectID, branchID)}
+}
+
+func (_c *Provisioner_DeleteBranch_Call) Run(run func(ctx context.Context, organizationID string, projectID string, branchID string)) *Provisioner_DeleteBranch_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string))
+	})
+	return _c
+}
+
+func (_c *Provisioner_DeleteBranch_Call) Return(_a0 error) *Provisioner_DeleteBranch_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
 type mockConstructorTestingTNewProvisioner interface {
 	mock.TestingT
 	Cleanup(func())

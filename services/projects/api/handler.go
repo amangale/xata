@@ -1616,9 +1616,7 @@ func hasClusterConfigChanged(body *spec.UpdateBranchJSONRequestBody) bool {
 func (s *handler) DeleteBranch(c echo.Context, organizationID spec.OrganizationID, projectID, branchID string) error {
 	return s.withOrganizationAccess(c, organizationID, All, func() error {
 		log.Ctx(c.Request().Context()).Log().Msgf("Deleting branch [%s]", branchID)
-		err := s.store.DeleteBranch(c.Request().Context(), organizationID, projectID, branchID, func(branch *store.Branch) error {
-			return cells.DeprovisionBranch(c.Request().Context(), organizationID, s.store, s.cells, branch)
-		})
+		err := s.provisioner.DeleteBranch(c.Request().Context(), organizationID, projectID, branchID)
 		if err != nil {
 			st, _ := status.FromError(err)
 			if st.Code() == codes.NotFound {
