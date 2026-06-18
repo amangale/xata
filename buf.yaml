@@ -5,6 +5,7 @@ modules:
     lint:
       ignore:
         - proto/slots/v1
+        - proto/xatastor-storage-node/v1
 lint:
   use:
     - STANDARD
