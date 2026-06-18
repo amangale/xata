@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	AuthService_ValidateAccess_FullMethodName     = "/auth.v1.AuthService/ValidateAccess"
+	AuthService_GetOrganization_FullMethodName    = "/auth.v1.AuthService/GetOrganization"
 	AuthService_UpdateOrganization_FullMethodName = "/auth.v1.AuthService/UpdateOrganization"
 )
 
@@ -31,6 +32,8 @@ const (
 type AuthServiceClient interface {
 	// ValidateAccess checks if the given token can call the specified endpoint
 	ValidateAccess(ctx context.Context, in *ValidateAccessRequest, opts ...grpc.CallOption) (*ValidateAccessResponse, error)
+	// GetOrganization returns the organization details for the given ID.
+	GetOrganization(ctx context.Context, in *GetOrganizationRequest, opts ...grpc.CallOption) (*GetOrganizationResponse, error)
 	// UpdateOrganization updates an organization's administrative status and triggers hibernation/wake-up of all branches under the organization.
 	UpdateOrganization(ctx context.Context, in *UpdateOrganizationRequest, opts ...grpc.CallOption) (*UpdateOrganizationResponse, error)
 }
@@ -47,6 +50,16 @@ func (c *authServiceClient) ValidateAccess(ctx context.Context, in *ValidateAcce
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ValidateAccessResponse)
 	err := c.cc.Invoke(ctx, AuthService_ValidateAccess_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) GetOrganization(ctx context.Context, in *GetOrganizationRequest, opts ...grpc.CallOption) (*GetOrganizationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOrganizationResponse)
+	err := c.cc.Invoke(ctx, AuthService_GetOrganization_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -71,6 +84,8 @@ func (c *authServiceClient) UpdateOrganization(ctx context.Context, in *UpdateOr
 type AuthServiceServer interface {
 	// ValidateAccess checks if the given token can call the specified endpoint
 	ValidateAccess(context.Context, *ValidateAccessRequest) (*ValidateAccessResponse, error)
+	// GetOrganization returns the organization details for the given ID.
+	GetOrganization(context.Context, *GetOrganizationRequest) (*GetOrganizationResponse, error)
 	// UpdateOrganization updates an organization's administrative status and triggers hibernation/wake-up of all branches under the organization.
 	UpdateOrganization(context.Context, *UpdateOrganizationRequest) (*UpdateOrganizationResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
@@ -85,6 +100,9 @@ type UnimplementedAuthServiceServer struct{}
 
 func (UnimplementedAuthServiceServer) ValidateAccess(context.Context, *ValidateAccessRequest) (*ValidateAccessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ValidateAccess not implemented")
+}
+func (UnimplementedAuthServiceServer) GetOrganization(context.Context, *GetOrganizationRequest) (*GetOrganizationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOrganization not implemented")
 }
 func (UnimplementedAuthServiceServer) UpdateOrganization(context.Context, *UpdateOrganizationRequest) (*UpdateOrganizationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateOrganization not implemented")
@@ -128,6 +146,24 @@ func _AuthService_ValidateAccess_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_GetOrganization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOrganizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).GetOrganization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_GetOrganization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).GetOrganization(ctx, req.(*GetOrganizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AuthService_UpdateOrganization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpdateOrganizationRequest)
 	if err := dec(in); err != nil {
@@ -156,6 +192,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateAccess",
 			Handler:    _AuthService_ValidateAccess_Handler,
+		},
+		{
+			MethodName: "GetOrganization",
+			Handler:    _AuthService_GetOrganization_Handler,
 		},
 		{
 			MethodName: "UpdateOrganization",

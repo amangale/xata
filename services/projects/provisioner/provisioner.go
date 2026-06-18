@@ -8,6 +8,7 @@ import (
 	"xata/services/projects/cells"
 	"xata/services/projects/store"
 
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -15,6 +16,77 @@ import (
 type FlagsConfig struct {
 	UsePool     bool
 	UseXatastor bool
+}
+
+type OrgLimits struct {
+	MaxProjects            int
+	MaxProjectsPerHour     int
+	MaxBranchesPerProject  int
+	MaxBranchesPerOrg      int
+	MaxBranchesPerHour     int
+	MaxInstancesPerBranch  int
+	MinInstancesPerBranch  int
+	MaxDescriptionLength   int
+	MaxAllowedInstanceType int
+}
+
+// StoreLimits returns the subset of limits needed by store.CreateBranch.
+func (l OrgLimits) StoreLimits() *store.OrgLimits {
+	return &store.OrgLimits{
+		MaxBranchesPerOrg:     l.MaxBranchesPerOrg,
+		MaxBranchesPerProject: l.MaxBranchesPerProject,
+		MaxBranchesPerHour:    l.MaxBranchesPerHour,
+	}
+}
+
+// ResolveOrgLimits returns the effective limits for an organization by combining
+// tier defaults, flag-based adjustments, and per-org DB overrides.
+// T1 orgs skip the DB lookup.
+func ResolveOrgLimits(ctx context.Context, s store.ProjectsStore, usageTier, organizationID, projectID string, flags FlagsConfig) (OrgLimits, error) {
+	tier := parseTier(ctx, usageTier)
+	def := func(key store.LimitKey) int { return store.TierDefaultInt(tier, key, 0) }
+
+	var overrides map[store.LimitKey]any
+	if tier != store.TierT1 {
+		var err error
+		overrides, err = s.GetOrgLimits(ctx, organizationID, projectID)
+		if err != nil {
+			return OrgLimits{}, fmt.Errorf("get org limits: %w", err)
+		}
+	}
+
+	maxBranchesPerOrg := def(store.LimitMaxBranchesPerOrg)
+	maxBranchesPerProject := def(store.LimitMaxBranchesPerProject)
+	maxBranchesPerHour := def(store.LimitMaxBranchesPerHour)
+	if flags.UseXatastor && tier != store.TierT1 {
+		maxBranchesPerOrg = store.XatastorMaxBranchesPerOrg
+		maxBranchesPerProject = store.XatastorMaxBranchesPerProject
+		maxBranchesPerHour = store.XatastorMaxBranchesPerHour
+	}
+
+	resolve := func(key store.LimitKey, fallback int) int {
+		return store.ResolveIntLimit(overrides, key, fallback)
+	}
+
+	return OrgLimits{
+		MaxProjects:            resolve(store.LimitMaxProjects, def(store.LimitMaxProjects)),
+		MaxProjectsPerHour:     resolve(store.LimitMaxProjectsPerHour, def(store.LimitMaxProjectsPerHour)),
+		MaxBranchesPerProject:  resolve(store.LimitMaxBranchesPerProject, maxBranchesPerProject),
+		MaxBranchesPerOrg:      resolve(store.LimitMaxBranchesPerOrg, maxBranchesPerOrg),
+		MaxBranchesPerHour:     resolve(store.LimitMaxBranchesPerHour, maxBranchesPerHour),
+		MaxInstancesPerBranch:  resolve(store.LimitMaxInstancesPerBranch, def(store.LimitMaxInstancesPerBranch)),
+		MinInstancesPerBranch:  resolve(store.LimitMinInstancesPerBranch, def(store.LimitMinInstancesPerBranch)),
+		MaxDescriptionLength:   resolve(store.LimitMaxDescriptionLength, def(store.LimitMaxDescriptionLength)),
+		MaxAllowedInstanceType: resolve(store.LimitMaxAllowedInstanceType, def(store.LimitMaxAllowedInstanceType)),
+	}, nil
+}
+
+func parseTier(ctx context.Context, usageTier string) store.UsageTier {
+	tier, ok := store.ParseUsageTier(usageTier)
+	if !ok {
+		log.Ctx(ctx).Warn().Str("usage_tier", usageTier).Msg("unknown usage tier, defaulting to t1")
+	}
+	return tier
 }
 
 type ClusterServicePayload struct {
@@ -53,6 +125,18 @@ func (p *BranchProvisioner) CreateBranch(ctx context.Context, projectID, organiz
 	project, err := p.store.GetProject(ctx, organizationID, projectID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Default scale-to-zero from project settings when not explicitly provided
+	if payload.Configuration.ScaleToZero == nil {
+		s2z := project.ScaleToZero.BaseBranches
+		if payload.ParentID != nil {
+			s2z = project.ScaleToZero.ChildBranches
+		}
+		payload.Configuration.ScaleToZero = &clustersv1.ScaleToZero{
+			Enabled:                 s2z.Enabled,
+			InactivityPeriodMinutes: int64(s2z.InactivityPeriod.Duration().Minutes()),
+		}
 	}
 
 	branch, err := p.store.CreateBranch(ctx, organizationID, projectID, payload.CellID, &store.CreateBranchConfiguration{

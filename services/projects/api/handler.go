@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -626,6 +625,10 @@ type ClusterServicePayload = provisioner.ClusterServicePayload
 // Create a new branch
 // (POST /organizations/{organizationID}/projects/{projectID}/branches)
 func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationID, projectID string) error {
+	// NOTE: Branch creation is also triggered by the GitHub App webhook (saas-services/projects/webhooks).
+	// Common provisioning logic lives in the provisioner package — changes to how branches are
+	// created should go there, not here. This handler should only deal with input validation,
+	// feature flags, and building the provisioner payload.
 	return s.withOrganizationAccess(c, organizationID, OnlyEnabled, func() error {
 		// Check if branch creation is disabled (any type of branch)
 		if s.feat.BoolValue(c.Request().Context(), flags.BranchCreationDisabled) {
@@ -638,7 +641,11 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 		log.Ctx(ctx).Info().Bool("usePgBackRest", usePgBackRest).Msg("pgbackrest feature flag")
 
 		claims := api.GetUserClaims(c)
-		orgLimits, err := s.resolveOrgLimits(ctx, claims.Organizations[string(organizationID)].UsageTier, string(organizationID), projectID, useXatastor)
+		featureFlags := provisioner.FlagsConfig{
+			UsePool:     s.feat.BoolValue(ctx, flags.UseClusterPool),
+			UseXatastor: useXatastor,
+		}
+		orgLimits, err := provisioner.ResolveOrgLimits(ctx, s.store, claims.Organizations[organizationID].UsageTier, organizationID, projectID, featureFlags)
 		if err != nil {
 			return err
 		}
@@ -705,18 +712,16 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 		createClusterPayload.Description = body.Description
 		createClusterPayload.BackupRetentionPeriod = apiToStoreBackupConfig(body.BackupConfiguration)
 		createClusterPayload.BackupConfig = apiToClustersBackupConfig(body.BackupConfiguration, createClusterPayload.BackupsEnabled, usePgBackRest)
-		createClusterPayload.Flags = provisioner.FlagsConfig{
-			UsePool:     s.feat.BoolValue(ctx, flags.UseClusterPool),
-			UseXatastor: useXatastor,
-		}
+		createClusterPayload.Flags = featureFlags
 		createClusterPayload.UsageTier = claims.Organizations[organizationID].UsageTier
-		createClusterPayload.Limits = orgLimitsForStore(orgLimits)
+		createClusterPayload.Limits = orgLimits.StoreLimits()
 
-		project, err := s.store.GetProject(ctx, organizationID, projectID)
-		if err != nil {
-			return err
+		if body.ScaleToZero != nil {
+			createClusterPayload.Configuration.ScaleToZero = &clustersv1.ScaleToZero{
+				Enabled:                 body.ScaleToZero.Enabled,
+				InactivityPeriodMinutes: int64(body.ScaleToZero.InactivityPeriodMinutes),
+			}
 		}
-		createClusterPayload.Configuration.ScaleToZero = apiToClustersScaleToZero(body.ScaleToZero, createClusterPayload.ParentID, project)
 
 		// Acquire project lock BEFORE creating the branch to prevent race conditions with IP filtering updates
 		releaseLock, err := s.store.AcquireProjectLock(ctx, projectID)
@@ -802,14 +807,14 @@ func (s *handler) prepareCreateClusterFromParent(ctx context.Context, organizati
 	}, nil
 }
 
-func (s *handler) handleBranchFromConfiguration(c context.Context, organizationID spec.OrganizationID, projectID, branchName string, payload spec.BranchFromConfiguration, orgLimits spec.OrganizationLimits) (ClusterServicePayload, error) {
+func (s *handler) handleBranchFromConfiguration(c context.Context, organizationID spec.OrganizationID, projectID, branchName string, payload spec.BranchFromConfiguration, orgLimits provisioner.OrgLimits) (ClusterServicePayload, error) {
 	if err := s.validateBranchFromConfiguration(c, organizationID, branchName, payload, orgLimits); err != nil {
 		return ClusterServicePayload{}, err
 	}
 	return s.prepareCreateClusterFromConfiguration(c, organizationID, projectID, branchName, payload, orgLimits)
 }
 
-func (s *handler) validateBranchFromConfiguration(ctx context.Context, organizationID spec.OrganizationID, name string, payload spec.BranchFromConfiguration, orgLimits spec.OrganizationLimits) error {
+func (s *handler) validateBranchFromConfiguration(ctx context.Context, organizationID spec.OrganizationID, name string, payload spec.BranchFromConfiguration, orgLimits provisioner.OrgLimits) error {
 	// validate payload
 	if payload.Configuration == (spec.ClusterConfiguration{}) {
 		return ErrorInvalidParam{BranchName: name, Param: "configuration", Message: "configuration is required for 'custom' mode"}
@@ -818,7 +823,7 @@ func (s *handler) validateBranchFromConfiguration(ctx context.Context, organizat
 	return validateReplicaCount(name, payload.Configuration.Replicas, orgLimits.MinInstancesPerBranch, orgLimits.MaxInstancesPerBranch)
 }
 
-func (s *handler) prepareCreateClusterFromConfiguration(ctx context.Context, organizationID spec.OrganizationID, projectID, branchName string, payload spec.BranchFromConfiguration, orgLimits spec.OrganizationLimits) (ClusterServicePayload, error) {
+func (s *handler) prepareCreateClusterFromConfiguration(ctx context.Context, organizationID spec.OrganizationID, projectID, branchName string, payload spec.BranchFromConfiguration, orgLimits provisioner.OrgLimits) (ClusterServicePayload, error) {
 	// validate image - from this moment on, the image is in the correct format, no need for prefix, suffix, extra validation
 	validImageFormat, err := s.validateImage(ctx, organizationID, payload.Configuration.Image)
 	if err != nil {
@@ -1255,7 +1260,9 @@ func (s *handler) UpdateBranch(c echo.Context, organizationID spec.OrganizationI
 		}
 
 		claims := api.GetUserClaims(c)
-		orgLimits, err := s.resolveOrgLimits(c.Request().Context(), claims.Organizations[organizationID].UsageTier, string(organizationID), projectID, s.feat.BoolValue(c.Request().Context(), flags.UseXatastor))
+		orgLimits, err := provisioner.ResolveOrgLimits(c.Request().Context(), s.store, claims.Organizations[organizationID].UsageTier, organizationID, projectID, provisioner.FlagsConfig{
+			UseXatastor: s.feat.BoolValue(c.Request().Context(), flags.UseXatastor),
+		})
 		if err != nil {
 			return err
 		}
@@ -1640,7 +1647,9 @@ func (s *handler) GetProjectLimits(c echo.Context, organizationID spec.Organizat
 		return s.withProject(c, organizationID, projectID, func(_ *store.Project) error {
 			ctx := c.Request().Context()
 			claims := api.GetUserClaims(c)
-			limits, err := s.resolveOrgLimits(ctx, claims.Organizations[string(organizationID)].UsageTier, string(organizationID), projectID, s.feat.BoolValue(ctx, flags.UseXatastor))
+			limits, err := provisioner.ResolveOrgLimits(ctx, s.store, claims.Organizations[organizationID].UsageTier, organizationID, projectID, provisioner.FlagsConfig{
+				UseXatastor: s.feat.BoolValue(ctx, flags.UseXatastor),
+			})
 			if err != nil {
 				return err
 			}
@@ -1669,47 +1678,6 @@ func (s *handler) GetDefaultProjectLimits(c echo.Context, organizationID spec.Or
 	})
 }
 
-// resolveOrgLimits returns the effective limits for an organization, applying tier
-// defaults and any per-org overrides from the DB. T1 orgs skip the DB lookup.
-// When projectID is non-empty, project-level overrides take precedence over
-// org-level ones. For T2 orgs with the UseXatastor flag enabled, the three
-// branch-count limits use xatastor-specific defaults before DB overrides are applied.
-func (s *handler) resolveOrgLimits(ctx context.Context, usageTier, organizationID, projectID string, useXatastor bool) (spec.OrganizationLimits, error) {
-	tier := orgTier(ctx, usageTier)
-	def := func(key store.LimitKey) int { return store.TierDefaultInt(tier, key, 0) }
-
-	// T1 skips the DB lookup; nil overrides causes resolveIntLimit to fall back to def.
-	var overrides map[store.LimitKey]any
-	if tier != store.TierT1 {
-		var err error
-		overrides, err = s.store.GetOrgLimits(ctx, organizationID, projectID)
-		if err != nil {
-			return spec.OrganizationLimits{}, fmt.Errorf("get org limits: %w", err)
-		}
-	}
-
-	maxBranchesPerOrg := def(store.LimitMaxBranchesPerOrg)
-	maxBranchesPerProject := def(store.LimitMaxBranchesPerProject)
-	maxBranchesPerHour := def(store.LimitMaxBranchesPerHour)
-	if useXatastor && tier != store.TierT1 {
-		maxBranchesPerOrg = store.XatastorMaxBranchesPerOrg
-		maxBranchesPerProject = store.XatastorMaxBranchesPerProject
-		maxBranchesPerHour = store.XatastorMaxBranchesPerHour
-	}
-
-	return spec.OrganizationLimits{
-		MaxProjects:            resolveIntLimit(ctx, overrides, store.LimitMaxProjects, def(store.LimitMaxProjects)),
-		MaxProjectsPerHour:     resolveIntLimit(ctx, overrides, store.LimitMaxProjectsPerHour, def(store.LimitMaxProjectsPerHour)),
-		MaxBranchesPerProject:  resolveIntLimit(ctx, overrides, store.LimitMaxBranchesPerProject, maxBranchesPerProject),
-		MaxBranchesPerOrg:      resolveIntLimit(ctx, overrides, store.LimitMaxBranchesPerOrg, maxBranchesPerOrg),
-		MaxInstancesPerBranch:  resolveIntLimit(ctx, overrides, store.LimitMaxInstancesPerBranch, def(store.LimitMaxInstancesPerBranch)),
-		MinInstancesPerBranch:  resolveIntLimit(ctx, overrides, store.LimitMinInstancesPerBranch, def(store.LimitMinInstancesPerBranch)),
-		MaxBranchesPerHour:     resolveIntLimit(ctx, overrides, store.LimitMaxBranchesPerHour, maxBranchesPerHour),
-		MaxDescriptionLength:   resolveIntLimit(ctx, overrides, store.LimitMaxDescriptionLength, def(store.LimitMaxDescriptionLength)),
-		MaxAllowedInstanceType: resolveIntLimit(ctx, overrides, store.LimitMaxAllowedInstanceType, def(store.LimitMaxAllowedInstanceType)),
-	}, nil
-}
-
 // GetOrganizationLimits returns the effective limits for an organization, applying
 // tier defaults and any per-organization overrides stored in the DB.
 // T1 organizations always receive tier defaults with no DB lookup.
@@ -1717,48 +1685,27 @@ func (s *handler) resolveOrgLimits(ctx context.Context, usageTier, organizationI
 func (s *handler) GetOrganizationLimits(c echo.Context, organizationID spec.OrganizationID) error {
 	return s.withOrganizationAccess(c, organizationID, All, func() error {
 		claims := api.GetUserClaims(c)
-		limits, err := s.resolveOrgLimits(c.Request().Context(), claims.Organizations[organizationID].UsageTier, string(organizationID), "", s.feat.BoolValue(c.Request().Context(), flags.UseXatastor))
+		limits, err := provisioner.ResolveOrgLimits(c.Request().Context(), s.store, claims.Organizations[organizationID].UsageTier, organizationID, "", provisioner.FlagsConfig{
+			UseXatastor: s.feat.BoolValue(c.Request().Context(), flags.UseXatastor),
+		})
 		if err != nil {
 			return err
 		}
-		return c.JSON(http.StatusOK, limits)
+		return c.JSON(http.StatusOK, orgLimitsToSpec(limits))
 	})
 }
 
-// orgTier resolves the usage tier from a raw usage tier string, defaulting to
-// TierT1 (more restrictive) for any unrecognized value.
-func orgTier(ctx context.Context, usageTier string) store.UsageTier {
-	tier, ok := store.ParseUsageTier(usageTier)
-	if !ok {
-		log.Ctx(ctx).Warn().Str("usage_tier", usageTier).Msg("unknown usage tier, defaulting to t1")
-	}
-	return tier
-}
-
-// resolveIntLimit returns the override value for key if present, otherwise def.
-func resolveIntLimit(ctx context.Context, overrides map[store.LimitKey]any, key store.LimitKey, def int) int {
-	v, ok := overrides[key]
-	if !ok {
-		return def
-	}
-	n, ok := v.(json.Number)
-	if !ok {
-		log.Ctx(ctx).Warn().Str("key", string(key)).Msgf("unexpected type %T for limit override, using default", v)
-		return def
-	}
-	i, err := n.Int64()
-	if err != nil {
-		log.Ctx(ctx).Warn().Str("key", string(key)).Str("value", n.String()).Msg("limit override is not a valid int64, using default")
-		return def
-	}
-	return int(i)
-}
-
-func orgLimitsForStore(l spec.OrganizationLimits) *store.OrgLimits {
-	return &store.OrgLimits{
-		MaxBranchesPerOrg:     l.MaxBranchesPerOrg,
-		MaxBranchesPerProject: l.MaxBranchesPerProject,
-		MaxBranchesPerHour:    l.MaxBranchesPerHour,
+func orgLimitsToSpec(l provisioner.OrgLimits) spec.OrganizationLimits {
+	return spec.OrganizationLimits{
+		MaxProjects:            l.MaxProjects,
+		MaxProjectsPerHour:     l.MaxProjectsPerHour,
+		MaxBranchesPerProject:  l.MaxBranchesPerProject,
+		MaxBranchesPerOrg:      l.MaxBranchesPerOrg,
+		MaxBranchesPerHour:     l.MaxBranchesPerHour,
+		MaxInstancesPerBranch:  l.MaxInstancesPerBranch,
+		MinInstancesPerBranch:  l.MinInstancesPerBranch,
+		MaxDescriptionLength:   l.MaxDescriptionLength,
+		MaxAllowedInstanceType: l.MaxAllowedInstanceType,
 	}
 }
 
@@ -1877,7 +1824,9 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 
 		claims := api.GetUserClaims(c)
 		useXatastor := s.feat.BoolValue(ctx, flags.UseXatastor)
-		orgLimits, err := s.resolveOrgLimits(ctx, claims.Organizations[string(organizationID)].UsageTier, string(organizationID), projectID, useXatastor)
+		orgLimits, err := provisioner.ResolveOrgLimits(ctx, s.store, claims.Organizations[organizationID].UsageTier, organizationID, projectID, provisioner.FlagsConfig{
+			UseXatastor: useXatastor,
+		})
 		if err != nil {
 			return err
 		}
@@ -1960,7 +1909,7 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 				BackupRetentionPeriod: apiToStoreBackupConfig(body.BackupConfiguration),
 				BackupsEnabled:        createClusterPayload.BackupsEnabled,
 				UsageTier:             claims.Organizations[organizationID].UsageTier,
-				Limits:                orgLimitsForStore(orgLimits),
+				Limits:                orgLimits.StoreLimits(),
 			}, func(branch *store.Branch) error {
 				scaleToZero := apiToClustersScaleToZero(body.ScaleToZero, createClusterPayload.ParentID, project)
 				createClusterPayload.Configuration.ScaleToZero = scaleToZero

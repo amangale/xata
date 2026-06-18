@@ -314,6 +314,94 @@ func (x *Organization) GetUsageTier() string {
 	return ""
 }
 
+type GetOrganizationRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetOrganizationRequest) Reset() {
+	*x = GetOrganizationRequest{}
+	mi := &file_auth_v1_auth_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrganizationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrganizationRequest) ProtoMessage() {}
+
+func (x *GetOrganizationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_auth_v1_auth_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrganizationRequest.ProtoReflect.Descriptor instead.
+func (*GetOrganizationRequest) Descriptor() ([]byte, []int) {
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetOrganizationRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+type GetOrganizationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Organization  *Organization          `protobuf:"bytes,1,opt,name=organization,proto3" json:"organization,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOrganizationResponse) Reset() {
+	*x = GetOrganizationResponse{}
+	mi := &file_auth_v1_auth_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrganizationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrganizationResponse) ProtoMessage() {}
+
+func (x *GetOrganizationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_auth_v1_auth_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrganizationResponse.ProtoReflect.Descriptor instead.
+func (*GetOrganizationResponse) Descriptor() ([]byte, []int) {
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetOrganizationResponse) GetOrganization() *Organization {
+	if x != nil {
+		return x.Organization
+	}
+	return nil
+}
+
 type UpdateOrganizationRequest struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationId        string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
@@ -325,7 +413,7 @@ type UpdateOrganizationRequest struct {
 
 func (x *UpdateOrganizationRequest) Reset() {
 	*x = UpdateOrganizationRequest{}
-	mi := &file_auth_v1_auth_proto_msgTypes[3]
+	mi := &file_auth_v1_auth_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -337,7 +425,7 @@ func (x *UpdateOrganizationRequest) String() string {
 func (*UpdateOrganizationRequest) ProtoMessage() {}
 
 func (x *UpdateOrganizationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[3]
+	mi := &file_auth_v1_auth_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -350,7 +438,7 @@ func (x *UpdateOrganizationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateOrganizationRequest.ProtoReflect.Descriptor instead.
 func (*UpdateOrganizationRequest) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{3}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *UpdateOrganizationRequest) GetOrganizationId() string {
@@ -383,7 +471,7 @@ type UpdateOrganizationResponse struct {
 
 func (x *UpdateOrganizationResponse) Reset() {
 	*x = UpdateOrganizationResponse{}
-	mi := &file_auth_v1_auth_proto_msgTypes[4]
+	mi := &file_auth_v1_auth_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -395,7 +483,7 @@ func (x *UpdateOrganizationResponse) String() string {
 func (*UpdateOrganizationResponse) ProtoMessage() {}
 
 func (x *UpdateOrganizationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[4]
+	mi := &file_auth_v1_auth_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -408,7 +496,7 @@ func (x *UpdateOrganizationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateOrganizationResponse.ProtoReflect.Descriptor instead.
 func (*UpdateOrganizationResponse) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{4}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *UpdateOrganizationResponse) GetOrganization() *Organization {
@@ -458,16 +546,21 @@ const file_auth_v1_auth_proto_rawDesc = "" +
 	"\n" +
 	"usage_tier\x18\b \x01(\tR\tusageTierB\x1b\n" +
 	"\x19_disabled_by_admin_reasonB\x11\n" +
-	"\x0f_billing_reason\"\xcb\x01\n" +
+	"\x0f_billing_reason\"A\n" +
+	"\x16GetOrganizationRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\"T\n" +
+	"\x17GetOrganizationResponse\x129\n" +
+	"\forganization\x18\x01 \x01(\v2\x15.auth.v1.OrganizationR\forganization\"\xcb\x01\n" +
 	"\x19UpdateOrganizationRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12*\n" +
 	"\x11disabled_by_admin\x18\x02 \x01(\bR\x0fdisabledByAdmin\x12<\n" +
 	"\x18disabled_by_admin_reason\x18\x03 \x01(\tH\x00R\x15disabledByAdminReason\x88\x01\x01B\x1b\n" +
 	"\x19_disabled_by_admin_reason\"W\n" +
 	"\x1aUpdateOrganizationResponse\x129\n" +
-	"\forganization\x18\x01 \x01(\v2\x15.auth.v1.OrganizationR\forganization2\xbf\x01\n" +
+	"\forganization\x18\x01 \x01(\v2\x15.auth.v1.OrganizationR\forganization2\x95\x02\n" +
 	"\vAuthService\x12Q\n" +
-	"\x0eValidateAccess\x12\x1e.auth.v1.ValidateAccessRequest\x1a\x1f.auth.v1.ValidateAccessResponse\x12]\n" +
+	"\x0eValidateAccess\x12\x1e.auth.v1.ValidateAccessRequest\x1a\x1f.auth.v1.ValidateAccessResponse\x12T\n" +
+	"\x0fGetOrganization\x12\x1f.auth.v1.GetOrganizationRequest\x1a .auth.v1.GetOrganizationResponse\x12]\n" +
 	"\x12UpdateOrganization\x12\".auth.v1.UpdateOrganizationRequest\x1a#.auth.v1.UpdateOrganizationResponseB|\n" +
 	"\vcom.auth.v1B\tAuthProtoP\x01Z%github.com/xataio/maki/auth/v1;authv1\xa2\x02\x03AXX\xaa\x02\aAuth.V1\xca\x02\aAuth\\V1\xe2\x02\x13Auth\\V1\\GPBMetadata\xea\x02\bAuth::V1b\x06proto3"
 
@@ -483,30 +576,35 @@ func file_auth_v1_auth_proto_rawDescGZIP() []byte {
 	return file_auth_v1_auth_proto_rawDescData
 }
 
-var file_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_auth_v1_auth_proto_goTypes = []any{
 	(*ValidateAccessRequest)(nil),      // 0: auth.v1.ValidateAccessRequest
 	(*ValidateAccessResponse)(nil),     // 1: auth.v1.ValidateAccessResponse
 	(*Organization)(nil),               // 2: auth.v1.Organization
-	(*UpdateOrganizationRequest)(nil),  // 3: auth.v1.UpdateOrganizationRequest
-	(*UpdateOrganizationResponse)(nil), // 4: auth.v1.UpdateOrganizationResponse
-	nil,                                // 5: auth.v1.ValidateAccessResponse.OrganizationsEntry
-	(*timestamppb.Timestamp)(nil),      // 6: google.protobuf.Timestamp
+	(*GetOrganizationRequest)(nil),     // 3: auth.v1.GetOrganizationRequest
+	(*GetOrganizationResponse)(nil),    // 4: auth.v1.GetOrganizationResponse
+	(*UpdateOrganizationRequest)(nil),  // 5: auth.v1.UpdateOrganizationRequest
+	(*UpdateOrganizationResponse)(nil), // 6: auth.v1.UpdateOrganizationResponse
+	nil,                                // 7: auth.v1.ValidateAccessResponse.OrganizationsEntry
+	(*timestamppb.Timestamp)(nil),      // 8: google.protobuf.Timestamp
 }
 var file_auth_v1_auth_proto_depIdxs = []int32{
-	5, // 0: auth.v1.ValidateAccessResponse.organizations:type_name -> auth.v1.ValidateAccessResponse.OrganizationsEntry
-	6, // 1: auth.v1.Organization.created_at:type_name -> google.protobuf.Timestamp
-	2, // 2: auth.v1.UpdateOrganizationResponse.organization:type_name -> auth.v1.Organization
-	2, // 3: auth.v1.ValidateAccessResponse.OrganizationsEntry.value:type_name -> auth.v1.Organization
-	0, // 4: auth.v1.AuthService.ValidateAccess:input_type -> auth.v1.ValidateAccessRequest
-	3, // 5: auth.v1.AuthService.UpdateOrganization:input_type -> auth.v1.UpdateOrganizationRequest
-	1, // 6: auth.v1.AuthService.ValidateAccess:output_type -> auth.v1.ValidateAccessResponse
-	4, // 7: auth.v1.AuthService.UpdateOrganization:output_type -> auth.v1.UpdateOrganizationResponse
-	6, // [6:8] is the sub-list for method output_type
-	4, // [4:6] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	7, // 0: auth.v1.ValidateAccessResponse.organizations:type_name -> auth.v1.ValidateAccessResponse.OrganizationsEntry
+	8, // 1: auth.v1.Organization.created_at:type_name -> google.protobuf.Timestamp
+	2, // 2: auth.v1.GetOrganizationResponse.organization:type_name -> auth.v1.Organization
+	2, // 3: auth.v1.UpdateOrganizationResponse.organization:type_name -> auth.v1.Organization
+	2, // 4: auth.v1.ValidateAccessResponse.OrganizationsEntry.value:type_name -> auth.v1.Organization
+	0, // 5: auth.v1.AuthService.ValidateAccess:input_type -> auth.v1.ValidateAccessRequest
+	3, // 6: auth.v1.AuthService.GetOrganization:input_type -> auth.v1.GetOrganizationRequest
+	5, // 7: auth.v1.AuthService.UpdateOrganization:input_type -> auth.v1.UpdateOrganizationRequest
+	1, // 8: auth.v1.AuthService.ValidateAccess:output_type -> auth.v1.ValidateAccessResponse
+	4, // 9: auth.v1.AuthService.GetOrganization:output_type -> auth.v1.GetOrganizationResponse
+	6, // 10: auth.v1.AuthService.UpdateOrganization:output_type -> auth.v1.UpdateOrganizationResponse
+	8, // [8:11] is the sub-list for method output_type
+	5, // [5:8] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_auth_v1_auth_proto_init() }
@@ -515,14 +613,14 @@ func file_auth_v1_auth_proto_init() {
 		return
 	}
 	file_auth_v1_auth_proto_msgTypes[2].OneofWrappers = []any{}
-	file_auth_v1_auth_proto_msgTypes[3].OneofWrappers = []any{}
+	file_auth_v1_auth_proto_msgTypes[5].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_auth_v1_auth_proto_rawDesc), len(file_auth_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -1,7 +1,6 @@
 package api
 
 import (
-	clustersv1 "xata/gen/proto/clusters/v1"
 	"xata/internal/apitest"
 	"xata/services/projects/store"
 )
@@ -51,12 +50,5 @@ func updateBranchConfig(name, description *string) *store.UpdateBranchConfigurat
 	return &store.UpdateBranchConfiguration{
 		Name:        name,
 		Description: description,
-	}
-}
-
-func defaultClustersScaleToZero() *clustersv1.ScaleToZero {
-	return &clustersv1.ScaleToZero{
-		Enabled:                 false,
-		InactivityPeriodMinutes: int64(defaultInactivityDuration.Minutes()),
 	}
 }

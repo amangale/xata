@@ -187,6 +187,26 @@ func (a *AuthService) ValidateAccess(ctx context.Context, req *authv1.ValidateAc
 	}, nil
 }
 
+func (a *AuthService) GetOrganization(ctx context.Context, req *authv1.GetOrganizationRequest) (*authv1.GetOrganizationResponse, error) {
+	org, err := a.kcRest.GetOrganization(ctx, a.realm, req.GetOrganizationId())
+	if err != nil {
+		return nil, fmt.Errorf("get organization: %w", err)
+	}
+	resp := &authv1.Organization{
+		Id:                    org.Id,
+		Status:                string(org.Status.Status),
+		DisabledByAdmin:       org.Status.DisabledByAdmin,
+		DisabledByAdminReason: org.Status.AdminReason,
+		BillingStatus:         string(org.Status.BillingStatus),
+		BillingReason:         org.Status.BillingReason,
+		UsageTier:             string(org.Status.UsageTier),
+	}
+	if org.Status.CreatedAt != nil {
+		resp.CreatedAt = timestamppb.New(*org.Status.CreatedAt)
+	}
+	return &authv1.GetOrganizationResponse{Organization: resp}, nil
+}
+
 func (a *AuthService) UpdateOrganization(ctx context.Context, req *authv1.UpdateOrganizationRequest) (*authv1.UpdateOrganizationResponse, error) {
 	org, err := a.orgs.UpdateOrganization(ctx, req.GetOrganizationId(), orgs.UpdateOrganizationOptions{
 		DisabledByAdmin:       &req.DisabledByAdmin,

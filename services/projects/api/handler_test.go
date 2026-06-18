@@ -684,21 +684,6 @@ func TestCreateBranch(t *testing.T) {
 	handler := NewAPIHandler(feat, mockStore, mockCells, "", nil, sched, mockAnalytics, mockPostgresConfig, mockImageProvider, mockProvisioner)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
-	now := time.Now()
-	childBranchesScaleToZero := store.ScaleToZero{
-		Enabled:          true,
-		InactivityPeriod: store.InactivityPeriod(15 * time.Minute),
-	}
-	project := store.Project{
-		ID:        "project_id",
-		Name:      "test",
-		CreatedAt: now,
-		ScaleToZero: store.ProjectScaleToZero{
-			BaseBranches:  defaultScaleToZeroConfig(),
-			ChildBranches: childBranchesScaleToZero,
-		},
-	}
-
 	branch := store.Branch{
 		ID:             "123",
 		Name:           "test",
@@ -763,7 +748,6 @@ func TestCreateBranch(t *testing.T) {
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).
 					Return(&clustersv1.GetPostgresClusterCredentialsResponse{Username: "user", Password: "pass"}, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Twice()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, branch.Name, mock.Anything).
 					Run(func(ctx context.Context, projectID, organizationID, name string, payload *provisioner.ClusterServicePayload) {
 						*capturedPayload = payload
@@ -796,7 +780,6 @@ func TestCreateBranch(t *testing.T) {
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).
 					Return(&clustersv1.GetPostgresClusterCredentialsResponse{Username: "user", Password: "pass"}, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Twice()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, branch.Name, mock.Anything).
 					Run(func(ctx context.Context, projectID, organizationID, name string, payload *provisioner.ClusterServicePayload) {
 						*capturedPayload = payload
@@ -806,15 +789,13 @@ func TestCreateBranch(t *testing.T) {
 					"postgres:17.5", configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
 			},
 			validateCaptured: func(t *testing.T, payload *provisioner.ClusterServicePayload) {
-				defaultScaleToZero := defaultClustersScaleToZero()
 				require.NotNil(t, payload, "provisioner.CreateBranch should have been called")
 				require.Equal(t, configuration.Replicas+1, payload.Configuration.NumInstances)
 				require.Equal(t, "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5", payload.Configuration.ImageName)
 				require.Equal(t, "250m", payload.Configuration.VcpuRequest)
 				require.Equal(t, "2", payload.Configuration.VcpuLimit)
 				require.Equal(t, "1Gi", payload.Configuration.Memory)
-				require.Equal(t, defaultScaleToZero.Enabled, payload.Configuration.ScaleToZero.Enabled)
-				require.Equal(t, defaultScaleToZero.InactivityPeriodMinutes, payload.Configuration.ScaleToZero.InactivityPeriodMinutes)
+				require.Nil(t, payload.Configuration.ScaleToZero, "ScaleToZero should be nil when not explicitly set")
 				require.Len(t, payload.Configuration.PostgresConfigurationParameters, 3)
 				require.Equal(t, "50", payload.Configuration.PostgresConfigurationParameters["max_connections"])
 				require.Equal(t, "256MB", payload.Configuration.PostgresConfigurationParameters["shared_buffers"])
@@ -851,7 +832,6 @@ func TestCreateBranch(t *testing.T) {
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).
 					Return(&clustersv1.GetPostgresClusterCredentialsResponse{Username: "user", Password: "pass"}, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Twice()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, branch.Name, mock.Anything).
 					Run(func(ctx context.Context, projectID, organizationID, name string, payload *provisioner.ClusterServicePayload) {
 						*capturedPayload = payload
@@ -861,15 +841,13 @@ func TestCreateBranch(t *testing.T) {
 					"postgres:17.5", configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
 			},
 			validateCaptured: func(t *testing.T, payload *provisioner.ClusterServicePayload) {
-				defaultScaleToZero := defaultClustersScaleToZero()
 				require.NotNil(t, payload, "provisioner.CreateBranch should have been called")
 				require.Equal(t, configuration.Replicas+1, payload.Configuration.NumInstances)
 				require.Equal(t, "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5", payload.Configuration.ImageName)
 				require.Equal(t, "250m", payload.Configuration.VcpuRequest)
 				require.Equal(t, "2", payload.Configuration.VcpuLimit)
 				require.Equal(t, "1Gi", payload.Configuration.Memory)
-				require.Equal(t, defaultScaleToZero.Enabled, payload.Configuration.ScaleToZero.Enabled)
-				require.Equal(t, defaultScaleToZero.InactivityPeriodMinutes, payload.Configuration.ScaleToZero.InactivityPeriodMinutes)
+				require.Nil(t, payload.Configuration.ScaleToZero, "ScaleToZero should be nil when not explicitly set")
 				require.Len(t, payload.Configuration.PostgresConfigurationParameters, 3)
 				require.Equal(t, "50", payload.Configuration.PostgresConfigurationParameters["max_connections"])
 				require.Equal(t, "256MB", payload.Configuration.PostgresConfigurationParameters["shared_buffers"])
@@ -906,7 +884,6 @@ func TestCreateBranch(t *testing.T) {
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).
 					Return(&clustersv1.GetPostgresClusterCredentialsResponse{Username: "user", Password: "pass"}, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Twice()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, branch.Name, mock.Anything).
 					Run(func(ctx context.Context, projectID, organizationID, name string, payload *provisioner.ClusterServicePayload) {
 						*capturedPayload = payload
@@ -916,15 +893,13 @@ func TestCreateBranch(t *testing.T) {
 					"postgres:17.5", configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
 			},
 			validateCaptured: func(t *testing.T, payload *provisioner.ClusterServicePayload) {
-				defaultScaleToZero := defaultClustersScaleToZero()
 				require.NotNil(t, payload, "provisioner.CreateBranch should have been called")
 				require.Equal(t, configuration.Replicas+1, payload.Configuration.NumInstances)
 				require.Equal(t, "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5", payload.Configuration.ImageName)
 				require.Equal(t, "250m", payload.Configuration.VcpuRequest)
 				require.Equal(t, "2", payload.Configuration.VcpuLimit)
 				require.Equal(t, "1Gi", payload.Configuration.Memory)
-				require.Equal(t, defaultScaleToZero.Enabled, payload.Configuration.ScaleToZero.Enabled)
-				require.Equal(t, defaultScaleToZero.InactivityPeriodMinutes, payload.Configuration.ScaleToZero.InactivityPeriodMinutes)
+				require.Nil(t, payload.Configuration.ScaleToZero, "ScaleToZero should be nil when not explicitly set")
 				require.Len(t, payload.Configuration.PostgresConfigurationParameters, 3)
 				require.Equal(t, "50", payload.Configuration.PostgresConfigurationParameters["max_connections"])
 				require.Equal(t, "256MB", payload.Configuration.PostgresConfigurationParameters["shared_buffers"])
@@ -952,7 +927,6 @@ func TestCreateBranch(t *testing.T) {
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: childBranch.ID, Username: "app"}).
 					Return(&clustersv1.GetPostgresClusterCredentialsResponse{Username: "user", Password: "pass"}, nil).Once()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, childBranch.Name, mock.Anything).
 					Run(func(ctx context.Context, projectID, organizationID, name string, payload *provisioner.ClusterServicePayload) {
 						*capturedPayload = payload
@@ -971,7 +945,6 @@ func TestCreateBranch(t *testing.T) {
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
 				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", *childBranch.ParentID).Return(&branch, nil).Once()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, childBranch.Name, mock.Anything).
 					Return(nil, provisioner.ErrParentBranchUnhealthy{ParentID: *childBranch.ParentID}).Once()
 			},
@@ -1006,7 +979,6 @@ func TestCreateBranch(t *testing.T) {
 				}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPreloadLibraries(mock.AnythingOfType("string")).Return([]string{"pg_stat_statements", "auto_explain"}, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, branch.Name, mock.Anything).
 					Return(nil, fmt.Errorf("some storage error")).Once()
 			},
@@ -1030,7 +1002,6 @@ func TestCreateBranch(t *testing.T) {
 					"work_mem":        "2259kB",
 				}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPreloadLibraries(mock.AnythingOfType("string")).Return([]string{"pg_stat_statements", "auto_explain"}, nil).Once()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, branch.Name, mock.Anything).
 					Return(nil, fmt.Errorf("some cluster error")).Once()
 			},
@@ -1137,7 +1108,6 @@ func TestCreateBranch(t *testing.T) {
 					Id:       branch.ID,
 					Username: "app",
 				}).Return(nil, fmt.Errorf("some credentials error")).Once()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, branch.Name, mock.Anything).
 					Run(func(ctx context.Context, projectID, organizationID, name string, payload *provisioner.ClusterServicePayload) {
 						*capturedPayload = payload
@@ -1174,7 +1144,6 @@ func TestCreateBranch(t *testing.T) {
 					Username: "user",
 					Password: "pass",
 				}, nil).Once()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, branch.Name, mock.Anything).
 					Run(func(ctx context.Context, projectID, organizationID, name string, payload *provisioner.ClusterServicePayload) {
 						*capturedPayload = payload
@@ -1226,7 +1195,6 @@ func TestCreateBranch(t *testing.T) {
 					"work_mem":        "2259kB",
 				}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPreloadLibraries(mock.AnythingOfType("string")).Return([]string{"pg_stat_statements", "auto_explain"}, nil).Once()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, branch.Name, mock.Anything).
 					Return(nil, store.ErrBranchAlreadyExists{Name: branch.Name}).Once()
 			},
@@ -1378,7 +1346,6 @@ func TestCreateBranch(t *testing.T) {
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).
 					Return(&clustersv1.GetPostgresClusterCredentialsResponse{Username: "user", Password: "pass"}, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Twice()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, branch.Name, mock.Anything).
 					Run(func(ctx context.Context, projectID, organizationID, name string, payload *provisioner.ClusterServicePayload) {
 						*capturedPayload = payload
@@ -1437,7 +1404,6 @@ func TestCreateBranch(t *testing.T) {
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).
 					Return(&clustersv1.GetPostgresClusterCredentialsResponse{Username: "user", Password: "pass"}, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Twice()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, branch.Name, mock.Anything).
 					Run(func(ctx context.Context, projectID, organizationID, name string, payload *provisioner.ClusterServicePayload) {
 						*capturedPayload = payload
@@ -1495,7 +1461,6 @@ func TestCreateBranch(t *testing.T) {
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).
 					Return(&clustersv1.GetPostgresClusterCredentialsResponse{Username: "user", Password: "pass"}, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Twice()
-				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, branch.Name, mock.Anything).
 					Run(func(ctx context.Context, projectID, organizationID, name string, payload *provisioner.ClusterServicePayload) {
 						*capturedPayload = payload

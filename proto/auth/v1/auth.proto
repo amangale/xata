@@ -41,6 +41,14 @@ message Organization {
   string usage_tier = 8;
 }
 
+message GetOrganizationRequest {
+  string organization_id = 1;
+}
+
+message GetOrganizationResponse {
+  Organization organization = 1;
+}
+
 message UpdateOrganizationRequest {
   string organization_id = 1;
   bool disabled_by_admin = 2;
@@ -55,6 +63,9 @@ message UpdateOrganizationResponse {
 service AuthService {
   // ValidateAccess checks if the given token can call the specified endpoint
   rpc ValidateAccess(ValidateAccessRequest) returns (ValidateAccessResponse);
+
+  // GetOrganization returns the organization details for the given ID.
+  rpc GetOrganization(GetOrganizationRequest) returns (GetOrganizationResponse);
 
   // UpdateOrganization updates an organization's administrative status and triggers hibernation/wake-up of all branches under the organization.
   rpc UpdateOrganization(UpdateOrganizationRequest) returns (UpdateOrganizationResponse);

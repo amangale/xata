@@ -2,8 +2,10 @@ package provisioner
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	clustersv1 "xata/gen/proto/clusters/v1"
 	"xata/gen/protomocks"
@@ -24,7 +26,14 @@ const (
 )
 
 func TestCreateBranch(t *testing.T) {
-	project := &store.Project{ID: projectID, Name: "test"}
+	project := &store.Project{
+		ID:   projectID,
+		Name: "test",
+		ScaleToZero: store.ProjectScaleToZero{
+			BaseBranches:  store.ScaleToZero{Enabled: false, InactivityPeriod: store.InactivityPeriod(30 * time.Minute)},
+			ChildBranches: store.ScaleToZero{Enabled: true, InactivityPeriod: store.InactivityPeriod(15 * time.Minute)},
+		},
+	}
 	projectWithIPFiltering := &store.Project{
 		ID:   projectID,
 		Name: "test",
@@ -189,6 +198,59 @@ func TestCreateBranch(t *testing.T) {
 				mockStore.EXPECT().GetPrimaryCell(mock.Anything, orgID, "us-east-1").Return(primaryCell, nil).Once()
 				mockClusters.EXPECT().RegisterPostgresCluster(mock.Anything, &clustersv1.RegisterPostgresClusterRequest{Id: branchOnSecondary.ID}).
 					Return(&clustersv1.RegisterPostgresClusterResponse{}, nil).Once()
+			},
+		},
+		"scale-to-zero defaults from project base branch settings": {
+			payload: basePayload,
+			branch:  branchOnPrimary,
+			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
+				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
+				mockCreateBranch(mockStore, branchOnPrimary)
+				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
+					return req.Configuration.ScaleToZero != nil &&
+						req.Configuration.ScaleToZero.Enabled == false &&
+						req.Configuration.ScaleToZero.InactivityPeriodMinutes == 30
+				})).Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
+				mockStore.EXPECT().GetPrimaryCell(mock.Anything, orgID, "us-east-1").Return(primaryCell, nil).Once()
+			},
+		},
+		"scale-to-zero defaults from project child branch settings": {
+			payload: func() *ClusterServicePayload {
+				p := basePayload()
+				p.ParentID = &parentID
+				return p
+			},
+			branch: childBranch,
+			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
+				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
+				mockCreateBranch(mockStore, childBranch)
+				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
+					return req.Configuration.ScaleToZero != nil &&
+						req.Configuration.ScaleToZero.Enabled == true &&
+						req.Configuration.ScaleToZero.InactivityPeriodMinutes == 15
+				})).Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
+				mockStore.EXPECT().GetPrimaryCell(mock.Anything, orgID, "us-east-1").Return(primaryCell, nil).Once()
+			},
+		},
+		"explicit scale-to-zero is not overridden by project defaults": {
+			payload: func() *ClusterServicePayload {
+				p := basePayload()
+				p.Configuration.ScaleToZero = &clustersv1.ScaleToZero{
+					Enabled:                 true,
+					InactivityPeriodMinutes: 60,
+				}
+				return p
+			},
+			branch: branchOnPrimary,
+			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
+				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
+				mockCreateBranch(mockStore, branchOnPrimary)
+				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
+					return req.Configuration.ScaleToZero != nil &&
+						req.Configuration.ScaleToZero.Enabled == true &&
+						req.Configuration.ScaleToZero.InactivityPeriodMinutes == 60
+				})).Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
+				mockStore.EXPECT().GetPrimaryCell(mock.Anything, orgID, "us-east-1").Return(primaryCell, nil).Once()
 			},
 		},
 		"GetProject error is returned": {
@@ -405,6 +467,135 @@ func TestDeleteBranch(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestResolveOrgLimits(t *testing.T) {
+	t1Defaults := OrgLimits{
+		MaxProjects:            store.TierDefaultInt(store.TierT1, store.LimitMaxProjects, 0),
+		MaxProjectsPerHour:     store.TierDefaultInt(store.TierT1, store.LimitMaxProjectsPerHour, 0),
+		MaxBranchesPerProject:  store.TierDefaultInt(store.TierT1, store.LimitMaxBranchesPerProject, 0),
+		MaxBranchesPerOrg:      store.TierDefaultInt(store.TierT1, store.LimitMaxBranchesPerOrg, 0),
+		MaxBranchesPerHour:     store.TierDefaultInt(store.TierT1, store.LimitMaxBranchesPerHour, 0),
+		MaxInstancesPerBranch:  store.TierDefaultInt(store.TierT1, store.LimitMaxInstancesPerBranch, 0),
+		MinInstancesPerBranch:  store.TierDefaultInt(store.TierT1, store.LimitMinInstancesPerBranch, 0),
+		MaxDescriptionLength:   store.TierDefaultInt(store.TierT1, store.LimitMaxDescriptionLength, 0),
+		MaxAllowedInstanceType: store.TierDefaultInt(store.TierT1, store.LimitMaxAllowedInstanceType, 0),
+	}
+
+	t2Defaults := OrgLimits{
+		MaxProjects:            store.TierDefaultInt(store.TierT2, store.LimitMaxProjects, 0),
+		MaxProjectsPerHour:     store.TierDefaultInt(store.TierT2, store.LimitMaxProjectsPerHour, 0),
+		MaxBranchesPerProject:  store.TierDefaultInt(store.TierT2, store.LimitMaxBranchesPerProject, 0),
+		MaxBranchesPerOrg:      store.TierDefaultInt(store.TierT2, store.LimitMaxBranchesPerOrg, 0),
+		MaxBranchesPerHour:     store.TierDefaultInt(store.TierT2, store.LimitMaxBranchesPerHour, 0),
+		MaxInstancesPerBranch:  store.TierDefaultInt(store.TierT2, store.LimitMaxInstancesPerBranch, 0),
+		MinInstancesPerBranch:  store.TierDefaultInt(store.TierT2, store.LimitMinInstancesPerBranch, 0),
+		MaxDescriptionLength:   store.TierDefaultInt(store.TierT2, store.LimitMaxDescriptionLength, 0),
+		MaxAllowedInstanceType: store.TierDefaultInt(store.TierT2, store.LimitMaxAllowedInstanceType, 0),
+	}
+
+	tests := map[string]struct {
+		usageTier  string
+		flags      FlagsConfig
+		overrides  map[store.LimitKey]any
+		setupMocks func(*storemocks.ProjectsStore)
+		want       OrgLimits
+		wantErr    string
+	}{
+		"t1 returns tier defaults without DB lookup": {
+			usageTier: "t1",
+			setupMocks: func(s *storemocks.ProjectsStore) {
+				// No GetOrgLimits call expected for T1
+			},
+			want: t1Defaults,
+		},
+		"t2 returns tier defaults when no DB overrides": {
+			usageTier: "t2",
+			setupMocks: func(s *storemocks.ProjectsStore) {
+				s.EXPECT().GetOrgLimits(mock.Anything, orgID, projectID).Return(map[store.LimitKey]any{}, nil).Once()
+			},
+			want: t2Defaults,
+		},
+		"t2 with xatastor overrides branch-count defaults": {
+			usageTier: "t2",
+			flags:     FlagsConfig{UseXatastor: true},
+			setupMocks: func(s *storemocks.ProjectsStore) {
+				s.EXPECT().GetOrgLimits(mock.Anything, orgID, projectID).Return(map[store.LimitKey]any{}, nil).Once()
+			},
+			want: func() OrgLimits {
+				l := t2Defaults
+				l.MaxBranchesPerOrg = store.XatastorMaxBranchesPerOrg
+				l.MaxBranchesPerProject = store.XatastorMaxBranchesPerProject
+				l.MaxBranchesPerHour = store.XatastorMaxBranchesPerHour
+				return l
+			}(),
+		},
+		"t1 with xatastor does not override branch-count defaults": {
+			usageTier:  "t1",
+			flags:      FlagsConfig{UseXatastor: true},
+			setupMocks: func(s *storemocks.ProjectsStore) {},
+			want:       t1Defaults,
+		},
+		"DB override wins over tier default": {
+			usageTier: "t2",
+			setupMocks: func(s *storemocks.ProjectsStore) {
+				s.EXPECT().GetOrgLimits(mock.Anything, orgID, projectID).Return(map[store.LimitKey]any{
+					store.LimitMaxBranchesPerProject: json.Number("999"),
+					store.LimitMaxDescriptionLength:  json.Number("200"),
+				}, nil).Once()
+			},
+			want: func() OrgLimits {
+				l := t2Defaults
+				l.MaxBranchesPerProject = 999
+				l.MaxDescriptionLength = 200
+				return l
+			}(),
+		},
+		"DB override wins over xatastor default": {
+			usageTier: "t2",
+			flags:     FlagsConfig{UseXatastor: true},
+			setupMocks: func(s *storemocks.ProjectsStore) {
+				s.EXPECT().GetOrgLimits(mock.Anything, orgID, projectID).Return(map[store.LimitKey]any{
+					store.LimitMaxBranchesPerOrg: json.Number("5000"),
+				}, nil).Once()
+			},
+			want: func() OrgLimits {
+				l := t2Defaults
+				l.MaxBranchesPerOrg = 5000
+				l.MaxBranchesPerProject = store.XatastorMaxBranchesPerProject
+				l.MaxBranchesPerHour = store.XatastorMaxBranchesPerHour
+				return l
+			}(),
+		},
+		"unknown tier defaults to t1": {
+			usageTier:  "unknown",
+			setupMocks: func(s *storemocks.ProjectsStore) {},
+			want:       t1Defaults,
+		},
+		"GetOrgLimits error is returned": {
+			usageTier: "t2",
+			setupMocks: func(s *storemocks.ProjectsStore) {
+				s.EXPECT().GetOrgLimits(mock.Anything, orgID, projectID).Return(nil, fmt.Errorf("db error")).Once()
+			},
+			wantErr: "get org limits",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockStore := storemocks.NewProjectsStore(t)
+			tt.setupMocks(mockStore)
+
+			got, err := ResolveOrgLimits(context.Background(), mockStore, tt.usageTier, orgID, projectID, tt.flags)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
 		})
 	}
 }

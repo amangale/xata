@@ -198,6 +198,12 @@ func (s *ProjectsService) Store() store.ProjectsStore {
 	return s.store
 }
 
+// AuthConn returns the gRPC connection to the auth service so that SaaS
+// wrappers can build auth clients without opening a second connection.
+func (s *ProjectsService) AuthConn() grpc.ClientConnInterface {
+	return s.authConn
+}
+
 // RegisterGRPCHandlers implements service.GRPCService.
 func (s *ProjectsService) RegisterGRPCHandlers(o *o11y.O, server *grpc.Server) {
 	projectsv1.RegisterProjectsServiceServer(server, rpc.NewProjectsService(s.store, cells.New(s.store)))
