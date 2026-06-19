@@ -699,13 +699,12 @@ func TestUpdatePostgresCluster(t *testing.T) {
 				b.Spec.ClusterSpec.Name = nil
 				b.Spec.ClusterSpec.Hibernation = nil
 				b.Annotations = map[string]string{
-					v1alpha1.WakeupPoolAnnotation:     "test-pool",
-					v1alpha1.AwaitingWakeupAnnotation: "false",
+					v1alpha1.WakeupPoolAnnotation: "test-pool",
 				}
 			},
 		},
 		{
-			name: "hibernate with wakeup-pool annotation updates a stale awaiting-wakeup annotation",
+			name: "hibernate with wakeup-pool annotation removes a stale awaiting-wakeup annotation",
 			inputBranchFn: func(b *v1alpha1.Branch) {
 				b.Annotations = map[string]string{
 					v1alpha1.WakeupPoolAnnotation:     "test-pool",
@@ -719,8 +718,7 @@ func TestUpdatePostgresCluster(t *testing.T) {
 				b.Spec.ClusterSpec.Name = nil
 				b.Spec.ClusterSpec.Hibernation = nil
 				b.Annotations = map[string]string{
-					v1alpha1.WakeupPoolAnnotation:     "test-pool",
-					v1alpha1.AwaitingWakeupAnnotation: "false",
+					v1alpha1.WakeupPoolAnnotation: "test-pool",
 				}
 			},
 		},

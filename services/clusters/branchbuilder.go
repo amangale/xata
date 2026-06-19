@@ -158,7 +158,7 @@ func (b *BranchBuilder) WithUpdatesFrom(req *clustersv1.UpdatePostgresClusterReq
 			if b.branch.HasWakeupPoolAnnotation() {
 				b.branch.Spec.ClusterSpec.Hibernation = nil
 				b.branch.Spec.ClusterSpec.Name = nil
-				b.branch.Annotations[v1alpha1.AwaitingWakeupAnnotation] = "false"
+				delete(b.branch.Annotations, v1alpha1.AwaitingWakeupAnnotation)
 			} else {
 				b.branch.Spec.ClusterSpec.Hibernation = ptr.To(v1alpha1.HibernationModeEnabled)
 			}
