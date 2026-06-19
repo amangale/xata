@@ -65,7 +65,7 @@ func TestWakeupReconciler(t *testing.T) {
 
 		// Expect the Branch to have:
 		// * A cluster name assigned
-		// * The awaiting wakeup annotation removed
+		// * The awaiting wakeup annotation set to false
 		requireEventuallyTrue(t, func() bool {
 			br := &v1alpha1.Branch{}
 			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(branch), br)
@@ -73,9 +73,7 @@ func TestWakeupReconciler(t *testing.T) {
 				return false
 			}
 
-			_, hasAnnotation := br.Annotations[v1alpha1.AwaitingWakeupAnnotation]
-
-			return br.Spec.ClusterSpec.Name != nil && !hasAnnotation
+			return br.Spec.ClusterSpec.Name != nil && !br.IsAwaitingWakeup()
 		})
 
 		// Expect the Cluster to no longer have the pool's controller owner
@@ -102,7 +100,7 @@ func TestWakeupReconciler(t *testing.T) {
 		})
 	})
 
-	t.Run("removes awaiting wakeup annotation when the branch already has a cluster", func(t *testing.T) {
+	t.Run("succeeds without claiming a cluster when the branch already has one assigned", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
@@ -110,14 +108,14 @@ func TestWakeupReconciler(t *testing.T) {
 		wrName := "wur-" + randomString(10)
 		clusterName := "cluster-" + randomString(10)
 
-		// Create a Branch that carries the awaiting wakeup annotation
+		// Create a Branch with a pool annotation and no cluster name
 		branch, err := createBranch(ctx, branchName, map[string]string{
-			v1alpha1.AwaitingWakeupAnnotation: "true",
+			v1alpha1.WakeupPoolAnnotation:     "some-pool",
+			v1alpha1.AwaitingWakeupAnnotation: "false",
 		})
 		require.NoError(t, err)
 
-		// Set the cluster name on the branch to simulate a prior reconcile that
-		// assigned the cluster but failed to remove the awaiting wakeup annotation
+		// Update the Branch to have a cluster name assigned
 		err = envtestutil.RetryOnConflict(ctx, k8sClient, branch, func(b *v1alpha1.Branch) {
 			b.Spec.ClusterSpec.Name = new(clusterName)
 		})
@@ -130,8 +128,7 @@ func TestWakeupReconciler(t *testing.T) {
 		// Expect the WakeupRequest to complete successfully
 		requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionTrue, v1alpha1.WakeupSucceededReason)
 
-		// Expect the Branch to retain its cluster name and have the awaiting
-		// wakeup annotation removed
+		// Expect the Branch to retain its existing cluster name
 		requireEventuallyTrue(t, func() bool {
 			br := &v1alpha1.Branch{}
 			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(branch), br)
@@ -139,9 +136,7 @@ func TestWakeupReconciler(t *testing.T) {
 				return false
 			}
 
-			_, hasAnnotation := br.Annotations[v1alpha1.AwaitingWakeupAnnotation]
-
-			return br.Spec.ClusterSpec.Name != nil && !hasAnnotation
+			return br.Spec.ClusterSpec.Name != nil && *br.Spec.ClusterSpec.Name == clusterName
 		})
 	})
 
