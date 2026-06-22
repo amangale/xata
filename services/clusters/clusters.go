@@ -439,7 +439,7 @@ func (c *ClustersService) DescribePostgresCluster(ctx context.Context, request *
 	}
 
 	// If the Branch is awaiting wakeup, set its status to Transient
-	if branch.HasAwaitingWakeupAnnotation() {
+	if branch.IsAwaitingWakeup() {
 		clusterStatus.StatusType = clustersv1.ClusterStatus_STATUS_TYPE_TRANSIENT
 	}
 

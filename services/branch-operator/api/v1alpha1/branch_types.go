@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	"strconv"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -343,11 +345,21 @@ func (b *Branch) WakeupPoolName() string {
 	return b.Annotations[WakeupPoolAnnotation]
 }
 
-// HasAwaitingWakeupAnnotation returns true if the Branch has the awaiting
-// wakeup annotation
-func (b *Branch) HasAwaitingWakeupAnnotation() bool {
-	_, ok := b.Annotations[AwaitingWakeupAnnotation]
-	return ok
+// IsAwaitingWakeup returns true if the Branch has the awaiting wakeup
+// annotation set to true
+func (b *Branch) IsAwaitingWakeup() bool {
+	value, ok := b.Annotations[AwaitingWakeupAnnotation]
+	if !ok {
+		return false
+	}
+
+	// Check the value of the annotation
+	awaiting, err := strconv.ParseBool(value)
+	if err != nil {
+		return false
+	}
+
+	return awaiting
 }
 
 type WALArchivingMode string
