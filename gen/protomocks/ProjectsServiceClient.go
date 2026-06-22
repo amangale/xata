@@ -211,6 +211,68 @@ func (_c *ProjectsServiceClient_DeleteProjectsInOrg_Call) Return(_a0 *projectsv1
 	return _c
 }
 
+// GetOrganizationLimits provides a mock function with given fields: ctx, in, opts
+func (_m *ProjectsServiceClient) GetOrganizationLimits(ctx context.Context, in *projectsv1.GetOrganizationLimitsRequest, opts ...grpc.CallOption) (*projectsv1.GetOrganizationLimitsResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *projectsv1.GetOrganizationLimitsResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *projectsv1.GetOrganizationLimitsRequest, ...grpc.CallOption) *projectsv1.GetOrganizationLimitsResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*projectsv1.GetOrganizationLimitsResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *projectsv1.GetOrganizationLimitsRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ProjectsServiceClient_GetOrganizationLimits_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOrganizationLimits'
+type ProjectsServiceClient_GetOrganizationLimits_Call struct {
+	*mock.Call
+}
+
+// GetOrganizationLimits is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in *projectsv1.GetOrganizationLimitsRequest
+//   - opts ...grpc.CallOption
+func (_e *ProjectsServiceClient_Expecter) GetOrganizationLimits(ctx interface{}, in interface{}, opts ...interface{}) *ProjectsServiceClient_GetOrganizationLimits_Call {
+	return &ProjectsServiceClient_GetOrganizationLimits_Call{Call: _e.mock.On("GetOrganizationLimits",
+		append([]interface{}{ctx, in}, opts...)...)}
+}
+
+func (_c *ProjectsServiceClient_GetOrganizationLimits_Call) Run(run func(ctx context.Context, in *projectsv1.GetOrganizationLimitsRequest, opts ...grpc.CallOption)) *ProjectsServiceClient_GetOrganizationLimits_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]grpc.CallOption, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(grpc.CallOption)
+			}
+		}
+		run(args[0].(context.Context), args[1].(*projectsv1.GetOrganizationLimitsRequest), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ProjectsServiceClient_GetOrganizationLimits_Call) Return(_a0 *projectsv1.GetOrganizationLimitsResponse, _a1 error) *ProjectsServiceClient_GetOrganizationLimits_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
 // HasActiveProjects provides a mock function with given fields: ctx, in, opts
 func (_m *ProjectsServiceClient) HasActiveProjects(ctx context.Context, in *projectsv1.HasActiveProjectsRequest, opts ...grpc.CallOption) (*projectsv1.HasActiveProjectsResponse, error) {
 	_va := make([]interface{}, len(opts))
@@ -393,6 +455,68 @@ func (_c *ProjectsServiceClient_ListRegions_Call) Run(run func(ctx context.Conte
 }
 
 func (_c *ProjectsServiceClient_ListRegions_Call) Return(_a0 *projectsv1.ListRegionsResponse, _a1 error) *ProjectsServiceClient_ListRegions_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+// SetOrganizationLimits provides a mock function with given fields: ctx, in, opts
+func (_m *ProjectsServiceClient) SetOrganizationLimits(ctx context.Context, in *projectsv1.SetOrganizationLimitsRequest, opts ...grpc.CallOption) (*projectsv1.SetOrganizationLimitsResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *projectsv1.SetOrganizationLimitsResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *projectsv1.SetOrganizationLimitsRequest, ...grpc.CallOption) *projectsv1.SetOrganizationLimitsResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*projectsv1.SetOrganizationLimitsResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *projectsv1.SetOrganizationLimitsRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ProjectsServiceClient_SetOrganizationLimits_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetOrganizationLimits'
+type ProjectsServiceClient_SetOrganizationLimits_Call struct {
+	*mock.Call
+}
+
+// SetOrganizationLimits is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in *projectsv1.SetOrganizationLimitsRequest
+//   - opts ...grpc.CallOption
+func (_e *ProjectsServiceClient_Expecter) SetOrganizationLimits(ctx interface{}, in interface{}, opts ...interface{}) *ProjectsServiceClient_SetOrganizationLimits_Call {
+	return &ProjectsServiceClient_SetOrganizationLimits_Call{Call: _e.mock.On("SetOrganizationLimits",
+		append([]interface{}{ctx, in}, opts...)...)}
+}
+
+func (_c *ProjectsServiceClient_SetOrganizationLimits_Call) Run(run func(ctx context.Context, in *projectsv1.SetOrganizationLimitsRequest, opts ...grpc.CallOption)) *ProjectsServiceClient_SetOrganizationLimits_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]grpc.CallOption, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(grpc.CallOption)
+			}
+		}
+		run(args[0].(context.Context), args[1].(*projectsv1.SetOrganizationLimitsRequest), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ProjectsServiceClient_SetOrganizationLimits_Call) Return(_a0 *projectsv1.SetOrganizationLimitsResponse, _a1 error) *ProjectsServiceClient_SetOrganizationLimits_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }

@@ -27,6 +27,14 @@ service ProjectsService {
 
   // HasActiveProjects returns true if the organization has at least one active project
   rpc HasActiveProjects(HasActiveProjectsRequest) returns (HasActiveProjectsResponse) {}
+
+  // SetOrganizationLimits upserts and/or resets projects-store limit overrides
+  // for an organization (empty project_id) or a single project.
+  rpc SetOrganizationLimits(SetOrganizationLimitsRequest) returns (SetOrganizationLimitsResponse) {}
+
+  // GetOrganizationLimits returns the stored projects-store limit overrides for
+  // an organization (empty project_id) or a single project.
+  rpc GetOrganizationLimits(GetOrganizationLimitsRequest) returns (GetOrganizationLimitsResponse) {}
 }
 
 // ListRegionsRequest is the request object for ListRegions
@@ -131,4 +139,55 @@ message DeleteProjectsInOrgResponse {
   int32 projects_deleted = 2;
   int32 branches_deleted = 3;
   repeated string errors = 4;
+}
+
+// Limits carries projects-store limit overrides. Every field is optional: on a
+// write a present field is upserted and an absent field is left unchanged; on a
+// read only fields with a stored override are present. All values are integers
+// (max_allowed_instance_type is a vCPU value, not an instance type name).
+message Limits {
+  optional int64 max_description_length = 1;
+  optional int64 max_branches_per_project = 2;
+  optional int64 max_instances_per_branch = 3;
+  optional int64 min_instances_per_branch = 4;
+  optional int64 max_storage_gb_per_branch = 5;
+  optional int64 max_allowed_instance_type = 6;
+  optional int64 max_branches_per_hour = 7;
+  optional int64 max_branches_per_org = 8;
+  optional int64 max_projects = 9;
+  optional int64 max_projects_per_hour = 10;
+}
+
+// SetOrganizationLimitsRequest is the request object for SetOrganizationLimits
+message SetOrganizationLimitsRequest {
+  string organization_id = 1;
+  // project_id scopes the override to a single project; empty applies it at the
+  // organization level.
+  string project_id = 2;
+  // limits holds the overrides to upsert; only present fields are written.
+  Limits limits = 3;
+  // reset lists limit keys (the same names used in limits, e.g.
+  // "max_branches_per_org") whose overrides are deleted so they fall back to the
+  // tier default.
+  repeated string reset = 4;
+}
+
+// SetOrganizationLimitsResponse is the response object for SetOrganizationLimits
+message SetOrganizationLimitsResponse {
+  // limits holds the stored overrides after the write.
+  Limits limits = 1;
+}
+
+// GetOrganizationLimitsRequest is the request object for GetOrganizationLimits
+message GetOrganizationLimitsRequest {
+  string organization_id = 1;
+  // project_id scopes the read to a single project (merged over org-level
+  // overrides); empty returns the organization-level overrides only.
+  string project_id = 2;
+}
+
+// GetOrganizationLimitsResponse is the response object for GetOrganizationLimits
+message GetOrganizationLimitsResponse {
+  // limits holds the stored overrides; only overridden fields are present.
+  Limits limits = 1;
 }

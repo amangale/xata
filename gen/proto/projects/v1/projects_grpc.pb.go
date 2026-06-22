@@ -27,6 +27,8 @@ const (
 	ProjectsService_UpdateOrganizationStatus_FullMethodName = "/projects.v1.ProjectsService/UpdateOrganizationStatus"
 	ProjectsService_DeleteProjectsInOrg_FullMethodName      = "/projects.v1.ProjectsService/DeleteProjectsInOrg"
 	ProjectsService_HasActiveProjects_FullMethodName        = "/projects.v1.ProjectsService/HasActiveProjects"
+	ProjectsService_SetOrganizationLimits_FullMethodName    = "/projects.v1.ProjectsService/SetOrganizationLimits"
+	ProjectsService_GetOrganizationLimits_FullMethodName    = "/projects.v1.ProjectsService/GetOrganizationLimits"
 )
 
 // ProjectsServiceClient is the client API for ProjectsService service.
@@ -51,6 +53,12 @@ type ProjectsServiceClient interface {
 	DeleteProjectsInOrg(ctx context.Context, in *DeleteProjectsInOrgRequest, opts ...grpc.CallOption) (*DeleteProjectsInOrgResponse, error)
 	// HasActiveProjects returns true if the organization has at least one active project
 	HasActiveProjects(ctx context.Context, in *HasActiveProjectsRequest, opts ...grpc.CallOption) (*HasActiveProjectsResponse, error)
+	// SetOrganizationLimits upserts and/or resets projects-store limit overrides
+	// for an organization (empty project_id) or a single project.
+	SetOrganizationLimits(ctx context.Context, in *SetOrganizationLimitsRequest, opts ...grpc.CallOption) (*SetOrganizationLimitsResponse, error)
+	// GetOrganizationLimits returns the stored projects-store limit overrides for
+	// an organization (empty project_id) or a single project.
+	GetOrganizationLimits(ctx context.Context, in *GetOrganizationLimitsRequest, opts ...grpc.CallOption) (*GetOrganizationLimitsResponse, error)
 }
 
 type projectsServiceClient struct {
@@ -141,6 +149,26 @@ func (c *projectsServiceClient) HasActiveProjects(ctx context.Context, in *HasAc
 	return out, nil
 }
 
+func (c *projectsServiceClient) SetOrganizationLimits(ctx context.Context, in *SetOrganizationLimitsRequest, opts ...grpc.CallOption) (*SetOrganizationLimitsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetOrganizationLimitsResponse)
+	err := c.cc.Invoke(ctx, ProjectsService_SetOrganizationLimits_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectsServiceClient) GetOrganizationLimits(ctx context.Context, in *GetOrganizationLimitsRequest, opts ...grpc.CallOption) (*GetOrganizationLimitsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOrganizationLimitsResponse)
+	err := c.cc.Invoke(ctx, ProjectsService_GetOrganizationLimits_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProjectsServiceServer is the server API for ProjectsService service.
 // All implementations must embed UnimplementedProjectsServiceServer
 // for forward compatibility.
@@ -163,6 +191,12 @@ type ProjectsServiceServer interface {
 	DeleteProjectsInOrg(context.Context, *DeleteProjectsInOrgRequest) (*DeleteProjectsInOrgResponse, error)
 	// HasActiveProjects returns true if the organization has at least one active project
 	HasActiveProjects(context.Context, *HasActiveProjectsRequest) (*HasActiveProjectsResponse, error)
+	// SetOrganizationLimits upserts and/or resets projects-store limit overrides
+	// for an organization (empty project_id) or a single project.
+	SetOrganizationLimits(context.Context, *SetOrganizationLimitsRequest) (*SetOrganizationLimitsResponse, error)
+	// GetOrganizationLimits returns the stored projects-store limit overrides for
+	// an organization (empty project_id) or a single project.
+	GetOrganizationLimits(context.Context, *GetOrganizationLimitsRequest) (*GetOrganizationLimitsResponse, error)
 	mustEmbedUnimplementedProjectsServiceServer()
 }
 
@@ -196,6 +230,12 @@ func (UnimplementedProjectsServiceServer) DeleteProjectsInOrg(context.Context, *
 }
 func (UnimplementedProjectsServiceServer) HasActiveProjects(context.Context, *HasActiveProjectsRequest) (*HasActiveProjectsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method HasActiveProjects not implemented")
+}
+func (UnimplementedProjectsServiceServer) SetOrganizationLimits(context.Context, *SetOrganizationLimitsRequest) (*SetOrganizationLimitsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetOrganizationLimits not implemented")
+}
+func (UnimplementedProjectsServiceServer) GetOrganizationLimits(context.Context, *GetOrganizationLimitsRequest) (*GetOrganizationLimitsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOrganizationLimits not implemented")
 }
 func (UnimplementedProjectsServiceServer) mustEmbedUnimplementedProjectsServiceServer() {}
 func (UnimplementedProjectsServiceServer) testEmbeddedByValue()                         {}
@@ -362,6 +402,42 @@ func _ProjectsService_HasActiveProjects_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectsService_SetOrganizationLimits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetOrganizationLimitsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectsServiceServer).SetOrganizationLimits(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectsService_SetOrganizationLimits_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectsServiceServer).SetOrganizationLimits(ctx, req.(*SetOrganizationLimitsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectsService_GetOrganizationLimits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOrganizationLimitsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectsServiceServer).GetOrganizationLimits(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectsService_GetOrganizationLimits_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectsServiceServer).GetOrganizationLimits(ctx, req.(*GetOrganizationLimitsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ProjectsService_ServiceDesc is the grpc.ServiceDesc for ProjectsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -400,6 +476,14 @@ var ProjectsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "HasActiveProjects",
 			Handler:    _ProjectsService_HasActiveProjects_Handler,
+		},
+		{
+			MethodName: "SetOrganizationLimits",
+			Handler:    _ProjectsService_SetOrganizationLimits_Handler,
+		},
+		{
+			MethodName: "GetOrganizationLimits",
+			Handler:    _ProjectsService_GetOrganizationLimits_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

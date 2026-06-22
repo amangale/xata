@@ -956,6 +956,348 @@ func (x *DeleteProjectsInOrgResponse) GetErrors() []string {
 	return nil
 }
 
+// Limits carries projects-store limit overrides. Every field is optional: on a
+// write a present field is upserted and an absent field is left unchanged; on a
+// read only fields with a stored override are present. All values are integers
+// (max_allowed_instance_type is a vCPU value, not an instance type name).
+type Limits struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	MaxDescriptionLength   *int64                 `protobuf:"varint,1,opt,name=max_description_length,json=maxDescriptionLength,proto3,oneof" json:"max_description_length,omitempty"`
+	MaxBranchesPerProject  *int64                 `protobuf:"varint,2,opt,name=max_branches_per_project,json=maxBranchesPerProject,proto3,oneof" json:"max_branches_per_project,omitempty"`
+	MaxInstancesPerBranch  *int64                 `protobuf:"varint,3,opt,name=max_instances_per_branch,json=maxInstancesPerBranch,proto3,oneof" json:"max_instances_per_branch,omitempty"`
+	MinInstancesPerBranch  *int64                 `protobuf:"varint,4,opt,name=min_instances_per_branch,json=minInstancesPerBranch,proto3,oneof" json:"min_instances_per_branch,omitempty"`
+	MaxStorageGbPerBranch  *int64                 `protobuf:"varint,5,opt,name=max_storage_gb_per_branch,json=maxStorageGbPerBranch,proto3,oneof" json:"max_storage_gb_per_branch,omitempty"`
+	MaxAllowedInstanceType *int64                 `protobuf:"varint,6,opt,name=max_allowed_instance_type,json=maxAllowedInstanceType,proto3,oneof" json:"max_allowed_instance_type,omitempty"`
+	MaxBranchesPerHour     *int64                 `protobuf:"varint,7,opt,name=max_branches_per_hour,json=maxBranchesPerHour,proto3,oneof" json:"max_branches_per_hour,omitempty"`
+	MaxBranchesPerOrg      *int64                 `protobuf:"varint,8,opt,name=max_branches_per_org,json=maxBranchesPerOrg,proto3,oneof" json:"max_branches_per_org,omitempty"`
+	MaxProjects            *int64                 `protobuf:"varint,9,opt,name=max_projects,json=maxProjects,proto3,oneof" json:"max_projects,omitempty"`
+	MaxProjectsPerHour     *int64                 `protobuf:"varint,10,opt,name=max_projects_per_hour,json=maxProjectsPerHour,proto3,oneof" json:"max_projects_per_hour,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *Limits) Reset() {
+	*x = Limits{}
+	mi := &file_projects_v1_projects_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Limits) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Limits) ProtoMessage() {}
+
+func (x *Limits) ProtoReflect() protoreflect.Message {
+	mi := &file_projects_v1_projects_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Limits.ProtoReflect.Descriptor instead.
+func (*Limits) Descriptor() ([]byte, []int) {
+	return file_projects_v1_projects_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *Limits) GetMaxDescriptionLength() int64 {
+	if x != nil && x.MaxDescriptionLength != nil {
+		return *x.MaxDescriptionLength
+	}
+	return 0
+}
+
+func (x *Limits) GetMaxBranchesPerProject() int64 {
+	if x != nil && x.MaxBranchesPerProject != nil {
+		return *x.MaxBranchesPerProject
+	}
+	return 0
+}
+
+func (x *Limits) GetMaxInstancesPerBranch() int64 {
+	if x != nil && x.MaxInstancesPerBranch != nil {
+		return *x.MaxInstancesPerBranch
+	}
+	return 0
+}
+
+func (x *Limits) GetMinInstancesPerBranch() int64 {
+	if x != nil && x.MinInstancesPerBranch != nil {
+		return *x.MinInstancesPerBranch
+	}
+	return 0
+}
+
+func (x *Limits) GetMaxStorageGbPerBranch() int64 {
+	if x != nil && x.MaxStorageGbPerBranch != nil {
+		return *x.MaxStorageGbPerBranch
+	}
+	return 0
+}
+
+func (x *Limits) GetMaxAllowedInstanceType() int64 {
+	if x != nil && x.MaxAllowedInstanceType != nil {
+		return *x.MaxAllowedInstanceType
+	}
+	return 0
+}
+
+func (x *Limits) GetMaxBranchesPerHour() int64 {
+	if x != nil && x.MaxBranchesPerHour != nil {
+		return *x.MaxBranchesPerHour
+	}
+	return 0
+}
+
+func (x *Limits) GetMaxBranchesPerOrg() int64 {
+	if x != nil && x.MaxBranchesPerOrg != nil {
+		return *x.MaxBranchesPerOrg
+	}
+	return 0
+}
+
+func (x *Limits) GetMaxProjects() int64 {
+	if x != nil && x.MaxProjects != nil {
+		return *x.MaxProjects
+	}
+	return 0
+}
+
+func (x *Limits) GetMaxProjectsPerHour() int64 {
+	if x != nil && x.MaxProjectsPerHour != nil {
+		return *x.MaxProjectsPerHour
+	}
+	return 0
+}
+
+// SetOrganizationLimitsRequest is the request object for SetOrganizationLimits
+type SetOrganizationLimitsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// project_id scopes the override to a single project; empty applies it at the
+	// organization level.
+	ProjectId string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	// limits holds the overrides to upsert; only present fields are written.
+	Limits *Limits `protobuf:"bytes,3,opt,name=limits,proto3" json:"limits,omitempty"`
+	// reset lists limit keys (the same names used in limits, e.g.
+	// "max_branches_per_org") whose overrides are deleted so they fall back to the
+	// tier default.
+	Reset_        []string `protobuf:"bytes,4,rep,name=reset,proto3" json:"reset,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetOrganizationLimitsRequest) Reset() {
+	*x = SetOrganizationLimitsRequest{}
+	mi := &file_projects_v1_projects_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetOrganizationLimitsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetOrganizationLimitsRequest) ProtoMessage() {}
+
+func (x *SetOrganizationLimitsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_projects_v1_projects_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetOrganizationLimitsRequest.ProtoReflect.Descriptor instead.
+func (*SetOrganizationLimitsRequest) Descriptor() ([]byte, []int) {
+	return file_projects_v1_projects_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *SetOrganizationLimitsRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *SetOrganizationLimitsRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *SetOrganizationLimitsRequest) GetLimits() *Limits {
+	if x != nil {
+		return x.Limits
+	}
+	return nil
+}
+
+func (x *SetOrganizationLimitsRequest) GetReset_() []string {
+	if x != nil {
+		return x.Reset_
+	}
+	return nil
+}
+
+// SetOrganizationLimitsResponse is the response object for SetOrganizationLimits
+type SetOrganizationLimitsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// limits holds the stored overrides after the write.
+	Limits        *Limits `protobuf:"bytes,1,opt,name=limits,proto3" json:"limits,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetOrganizationLimitsResponse) Reset() {
+	*x = SetOrganizationLimitsResponse{}
+	mi := &file_projects_v1_projects_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetOrganizationLimitsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetOrganizationLimitsResponse) ProtoMessage() {}
+
+func (x *SetOrganizationLimitsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_projects_v1_projects_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetOrganizationLimitsResponse.ProtoReflect.Descriptor instead.
+func (*SetOrganizationLimitsResponse) Descriptor() ([]byte, []int) {
+	return file_projects_v1_projects_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *SetOrganizationLimitsResponse) GetLimits() *Limits {
+	if x != nil {
+		return x.Limits
+	}
+	return nil
+}
+
+// GetOrganizationLimitsRequest is the request object for GetOrganizationLimits
+type GetOrganizationLimitsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// project_id scopes the read to a single project (merged over org-level
+	// overrides); empty returns the organization-level overrides only.
+	ProjectId     string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOrganizationLimitsRequest) Reset() {
+	*x = GetOrganizationLimitsRequest{}
+	mi := &file_projects_v1_projects_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrganizationLimitsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrganizationLimitsRequest) ProtoMessage() {}
+
+func (x *GetOrganizationLimitsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_projects_v1_projects_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrganizationLimitsRequest.ProtoReflect.Descriptor instead.
+func (*GetOrganizationLimitsRequest) Descriptor() ([]byte, []int) {
+	return file_projects_v1_projects_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *GetOrganizationLimitsRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *GetOrganizationLimitsRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+// GetOrganizationLimitsResponse is the response object for GetOrganizationLimits
+type GetOrganizationLimitsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// limits holds the stored overrides; only overridden fields are present.
+	Limits        *Limits `protobuf:"bytes,1,opt,name=limits,proto3" json:"limits,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOrganizationLimitsResponse) Reset() {
+	*x = GetOrganizationLimitsResponse{}
+	mi := &file_projects_v1_projects_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrganizationLimitsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrganizationLimitsResponse) ProtoMessage() {}
+
+func (x *GetOrganizationLimitsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_projects_v1_projects_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrganizationLimitsResponse.ProtoReflect.Descriptor instead.
+func (*GetOrganizationLimitsResponse) Descriptor() ([]byte, []int) {
+	return file_projects_v1_projects_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GetOrganizationLimitsResponse) GetLimits() *Limits {
+	if x != nil {
+		return x.Limits
+	}
+	return nil
+}
+
 var File_projects_v1_projects_proto protoreflect.FileDescriptor
 
 const file_projects_v1_projects_proto_rawDesc = "" +
@@ -1018,7 +1360,43 @@ const file_projects_v1_projects_proto_rawDesc = "" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12)\n" +
 	"\x10projects_deleted\x18\x02 \x01(\x05R\x0fprojectsDeleted\x12)\n" +
 	"\x10branches_deleted\x18\x03 \x01(\x05R\x0fbranchesDeleted\x12\x16\n" +
-	"\x06errors\x18\x04 \x03(\tR\x06errors2\x8e\x06\n" +
+	"\x06errors\x18\x04 \x03(\tR\x06errors\"\xd6\x06\n" +
+	"\x06Limits\x129\n" +
+	"\x16max_description_length\x18\x01 \x01(\x03H\x00R\x14maxDescriptionLength\x88\x01\x01\x12<\n" +
+	"\x18max_branches_per_project\x18\x02 \x01(\x03H\x01R\x15maxBranchesPerProject\x88\x01\x01\x12<\n" +
+	"\x18max_instances_per_branch\x18\x03 \x01(\x03H\x02R\x15maxInstancesPerBranch\x88\x01\x01\x12<\n" +
+	"\x18min_instances_per_branch\x18\x04 \x01(\x03H\x03R\x15minInstancesPerBranch\x88\x01\x01\x12=\n" +
+	"\x19max_storage_gb_per_branch\x18\x05 \x01(\x03H\x04R\x15maxStorageGbPerBranch\x88\x01\x01\x12>\n" +
+	"\x19max_allowed_instance_type\x18\x06 \x01(\x03H\x05R\x16maxAllowedInstanceType\x88\x01\x01\x126\n" +
+	"\x15max_branches_per_hour\x18\a \x01(\x03H\x06R\x12maxBranchesPerHour\x88\x01\x01\x124\n" +
+	"\x14max_branches_per_org\x18\b \x01(\x03H\aR\x11maxBranchesPerOrg\x88\x01\x01\x12&\n" +
+	"\fmax_projects\x18\t \x01(\x03H\bR\vmaxProjects\x88\x01\x01\x126\n" +
+	"\x15max_projects_per_hour\x18\n" +
+	" \x01(\x03H\tR\x12maxProjectsPerHour\x88\x01\x01B\x19\n" +
+	"\x17_max_description_lengthB\x1b\n" +
+	"\x19_max_branches_per_projectB\x1b\n" +
+	"\x19_max_instances_per_branchB\x1b\n" +
+	"\x19_min_instances_per_branchB\x1c\n" +
+	"\x1a_max_storage_gb_per_branchB\x1c\n" +
+	"\x1a_max_allowed_instance_typeB\x18\n" +
+	"\x16_max_branches_per_hourB\x17\n" +
+	"\x15_max_branches_per_orgB\x0f\n" +
+	"\r_max_projectsB\x18\n" +
+	"\x16_max_projects_per_hour\"\xa9\x01\n" +
+	"\x1cSetOrganizationLimitsRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12+\n" +
+	"\x06limits\x18\x03 \x01(\v2\x13.projects.v1.LimitsR\x06limits\x12\x14\n" +
+	"\x05reset\x18\x04 \x03(\tR\x05reset\"L\n" +
+	"\x1dSetOrganizationLimitsResponse\x12+\n" +
+	"\x06limits\x18\x01 \x01(\v2\x13.projects.v1.LimitsR\x06limits\"f\n" +
+	"\x1cGetOrganizationLimitsRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\"L\n" +
+	"\x1dGetOrganizationLimitsResponse\x12+\n" +
+	"\x06limits\x18\x01 \x01(\v2\x13.projects.v1.LimitsR\x06limits2\xf2\a\n" +
 	"\x0fProjectsService\x12R\n" +
 	"\vListRegions\x12\x1f.projects.v1.ListRegionsRequest\x1a .projects.v1.ListRegionsResponse\"\x00\x12U\n" +
 	"\fCreateRegion\x12 .projects.v1.CreateRegionRequest\x1a!.projects.v1.CreateRegionResponse\"\x00\x12L\n" +
@@ -1028,7 +1406,9 @@ const file_projects_v1_projects_proto_rawDesc = "" +
 	"\x11ValidateHierarchy\x12%.projects.v1.ValidateHierarchyRequest\x1a&.projects.v1.ValidateHierarchyResponse\"\x00\x12y\n" +
 	"\x18UpdateOrganizationStatus\x12,.projects.v1.UpdateOrganizationStatusRequest\x1a-.projects.v1.UpdateOrganizationStatusResponse\"\x00\x12j\n" +
 	"\x13DeleteProjectsInOrg\x12'.projects.v1.DeleteProjectsInOrgRequest\x1a(.projects.v1.DeleteProjectsInOrgResponse\"\x00\x12d\n" +
-	"\x11HasActiveProjects\x12%.projects.v1.HasActiveProjectsRequest\x1a&.projects.v1.HasActiveProjectsResponse\"\x00B\x9c\x01\n" +
+	"\x11HasActiveProjects\x12%.projects.v1.HasActiveProjectsRequest\x1a&.projects.v1.HasActiveProjectsResponse\"\x00\x12p\n" +
+	"\x15SetOrganizationLimits\x12).projects.v1.SetOrganizationLimitsRequest\x1a*.projects.v1.SetOrganizationLimitsResponse\"\x00\x12p\n" +
+	"\x15GetOrganizationLimits\x12).projects.v1.GetOrganizationLimitsRequest\x1a*.projects.v1.GetOrganizationLimitsResponse\"\x00B\x9c\x01\n" +
 	"\x0fcom.projects.v1B\rProjectsProtoP\x01Z-github.com/xataio/maki/projects/v1;projectsv1\xa2\x02\x03PXX\xaa\x02\vProjects.V1\xca\x02\vProjects\\V1\xe2\x02\x17Projects\\V1\\GPBMetadata\xea\x02\fProjects::V1b\x06proto3"
 
 var (
@@ -1043,7 +1423,7 @@ func file_projects_v1_projects_proto_rawDescGZIP() []byte {
 	return file_projects_v1_projects_proto_rawDescData
 }
 
-var file_projects_v1_projects_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_projects_v1_projects_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_projects_v1_projects_proto_goTypes = []any{
 	(*ListRegionsRequest)(nil),               // 0: projects.v1.ListRegionsRequest
 	(*ListRegionsResponse)(nil),              // 1: projects.v1.ListRegionsResponse
@@ -1063,31 +1443,43 @@ var file_projects_v1_projects_proto_goTypes = []any{
 	(*HasActiveProjectsResponse)(nil),        // 15: projects.v1.HasActiveProjectsResponse
 	(*DeleteProjectsInOrgRequest)(nil),       // 16: projects.v1.DeleteProjectsInOrgRequest
 	(*DeleteProjectsInOrgResponse)(nil),      // 17: projects.v1.DeleteProjectsInOrgResponse
+	(*Limits)(nil),                           // 18: projects.v1.Limits
+	(*SetOrganizationLimitsRequest)(nil),     // 19: projects.v1.SetOrganizationLimitsRequest
+	(*SetOrganizationLimitsResponse)(nil),    // 20: projects.v1.SetOrganizationLimitsResponse
+	(*GetOrganizationLimitsRequest)(nil),     // 21: projects.v1.GetOrganizationLimitsRequest
+	(*GetOrganizationLimitsResponse)(nil),    // 22: projects.v1.GetOrganizationLimitsResponse
 }
 var file_projects_v1_projects_proto_depIdxs = []int32{
 	2,  // 0: projects.v1.ListRegionsResponse.regions:type_name -> projects.v1.Region
 	8,  // 1: projects.v1.ListCellsResponse.cells:type_name -> projects.v1.Cell
-	0,  // 2: projects.v1.ProjectsService.ListRegions:input_type -> projects.v1.ListRegionsRequest
-	3,  // 3: projects.v1.ProjectsService.CreateRegion:input_type -> projects.v1.CreateRegionRequest
-	5,  // 4: projects.v1.ProjectsService.ListCells:input_type -> projects.v1.ListCellsRequest
-	9,  // 5: projects.v1.ProjectsService.CreateCell:input_type -> projects.v1.CreateCellRequest
-	10, // 6: projects.v1.ProjectsService.ValidateHierarchy:input_type -> projects.v1.ValidateHierarchyRequest
-	12, // 7: projects.v1.ProjectsService.UpdateOrganizationStatus:input_type -> projects.v1.UpdateOrganizationStatusRequest
-	16, // 8: projects.v1.ProjectsService.DeleteProjectsInOrg:input_type -> projects.v1.DeleteProjectsInOrgRequest
-	14, // 9: projects.v1.ProjectsService.HasActiveProjects:input_type -> projects.v1.HasActiveProjectsRequest
-	1,  // 10: projects.v1.ProjectsService.ListRegions:output_type -> projects.v1.ListRegionsResponse
-	4,  // 11: projects.v1.ProjectsService.CreateRegion:output_type -> projects.v1.CreateRegionResponse
-	6,  // 12: projects.v1.ProjectsService.ListCells:output_type -> projects.v1.ListCellsResponse
-	7,  // 13: projects.v1.ProjectsService.CreateCell:output_type -> projects.v1.CreateCellResponse
-	11, // 14: projects.v1.ProjectsService.ValidateHierarchy:output_type -> projects.v1.ValidateHierarchyResponse
-	13, // 15: projects.v1.ProjectsService.UpdateOrganizationStatus:output_type -> projects.v1.UpdateOrganizationStatusResponse
-	17, // 16: projects.v1.ProjectsService.DeleteProjectsInOrg:output_type -> projects.v1.DeleteProjectsInOrgResponse
-	15, // 17: projects.v1.ProjectsService.HasActiveProjects:output_type -> projects.v1.HasActiveProjectsResponse
-	10, // [10:18] is the sub-list for method output_type
-	2,  // [2:10] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	18, // 2: projects.v1.SetOrganizationLimitsRequest.limits:type_name -> projects.v1.Limits
+	18, // 3: projects.v1.SetOrganizationLimitsResponse.limits:type_name -> projects.v1.Limits
+	18, // 4: projects.v1.GetOrganizationLimitsResponse.limits:type_name -> projects.v1.Limits
+	0,  // 5: projects.v1.ProjectsService.ListRegions:input_type -> projects.v1.ListRegionsRequest
+	3,  // 6: projects.v1.ProjectsService.CreateRegion:input_type -> projects.v1.CreateRegionRequest
+	5,  // 7: projects.v1.ProjectsService.ListCells:input_type -> projects.v1.ListCellsRequest
+	9,  // 8: projects.v1.ProjectsService.CreateCell:input_type -> projects.v1.CreateCellRequest
+	10, // 9: projects.v1.ProjectsService.ValidateHierarchy:input_type -> projects.v1.ValidateHierarchyRequest
+	12, // 10: projects.v1.ProjectsService.UpdateOrganizationStatus:input_type -> projects.v1.UpdateOrganizationStatusRequest
+	16, // 11: projects.v1.ProjectsService.DeleteProjectsInOrg:input_type -> projects.v1.DeleteProjectsInOrgRequest
+	14, // 12: projects.v1.ProjectsService.HasActiveProjects:input_type -> projects.v1.HasActiveProjectsRequest
+	19, // 13: projects.v1.ProjectsService.SetOrganizationLimits:input_type -> projects.v1.SetOrganizationLimitsRequest
+	21, // 14: projects.v1.ProjectsService.GetOrganizationLimits:input_type -> projects.v1.GetOrganizationLimitsRequest
+	1,  // 15: projects.v1.ProjectsService.ListRegions:output_type -> projects.v1.ListRegionsResponse
+	4,  // 16: projects.v1.ProjectsService.CreateRegion:output_type -> projects.v1.CreateRegionResponse
+	6,  // 17: projects.v1.ProjectsService.ListCells:output_type -> projects.v1.ListCellsResponse
+	7,  // 18: projects.v1.ProjectsService.CreateCell:output_type -> projects.v1.CreateCellResponse
+	11, // 19: projects.v1.ProjectsService.ValidateHierarchy:output_type -> projects.v1.ValidateHierarchyResponse
+	13, // 20: projects.v1.ProjectsService.UpdateOrganizationStatus:output_type -> projects.v1.UpdateOrganizationStatusResponse
+	17, // 21: projects.v1.ProjectsService.DeleteProjectsInOrg:output_type -> projects.v1.DeleteProjectsInOrgResponse
+	15, // 22: projects.v1.ProjectsService.HasActiveProjects:output_type -> projects.v1.HasActiveProjectsResponse
+	20, // 23: projects.v1.ProjectsService.SetOrganizationLimits:output_type -> projects.v1.SetOrganizationLimitsResponse
+	22, // 24: projects.v1.ProjectsService.GetOrganizationLimits:output_type -> projects.v1.GetOrganizationLimitsResponse
+	15, // [15:25] is the sub-list for method output_type
+	5,  // [5:15] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_projects_v1_projects_proto_init() }
@@ -1097,13 +1489,14 @@ func file_projects_v1_projects_proto_init() {
 	}
 	file_projects_v1_projects_proto_msgTypes[2].OneofWrappers = []any{}
 	file_projects_v1_projects_proto_msgTypes[3].OneofWrappers = []any{}
+	file_projects_v1_projects_proto_msgTypes[18].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_projects_v1_projects_proto_rawDesc), len(file_projects_v1_projects_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
