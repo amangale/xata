@@ -11,7 +11,6 @@ import (
 	"xata/internal/o11y"
 	"xata/internal/service"
 	"xata/services/clusters/internal/connectors/cnpg"
-	"xata/services/clusters/internal/connectors/openebs"
 	"xata/services/clusters/observability"
 
 	"google.golang.org/grpc"
@@ -57,8 +56,7 @@ type ClustersService struct {
 	config Config
 
 	// Connectors
-	cnpgConnector    cnpg.Connector
-	openebsConnector openebs.Connector
+	cnpgConnector cnpg.Connector
 
 	// Kubernetes client
 	kubeClient client.Client
@@ -99,13 +97,6 @@ func (c *ClustersService) Init(ctx context.Context) error {
 		return fmt.Errorf("cannot init cnpg client: %w", err)
 	}
 	c.cnpgConnector = cnpgConnector
-
-	// Initialize OpenEBS connector
-	openebsConnector, err := openebs.NewConnector(c.config.KubeConfig, c.config.DiskPoolNamespace)
-	if err != nil {
-		return fmt.Errorf("cannot init openebs client: %w", err)
-	}
-	c.openebsConnector = openebsConnector
 
 	// Create a new scheme and register Branch CRs
 	scheme := runtime.NewScheme()
@@ -540,18 +531,6 @@ func (c *ClustersService) DeregisterPostgresCluster(ctx context.Context, request
 	}
 
 	return &clustersv1.DeregisterPostgresClusterResponse{}, nil
-}
-
-// GetCellUtilization returns the available storage space in the cell.
-func (c *ClustersService) GetCellUtilization(ctx context.Context, request *clustersv1.GetCellUtilizationRequest) (*clustersv1.GetCellUtilizationResponse, error) {
-	bytes, err := c.openebsConnector.AvailableSpaceBytes(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get cell utilization: %w", err)
-	}
-
-	return &clustersv1.GetCellUtilizationResponse{
-		AvailableBytes: bytes,
-	}, nil
 }
 
 // GetObjectStore retrieves the Barman ObjectStore status and recovery windows

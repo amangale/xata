@@ -30,7 +30,6 @@ import (
 	"xata/services/branch-operator/api/v1alpha1"
 	"xata/services/clusters/internal/connectors/cnpg"
 	cnpgmocks "xata/services/clusters/internal/connectors/cnpg/mocks"
-	openebsmocks "xata/services/clusters/internal/connectors/openebs/mocks"
 )
 
 var pitrTimestamp = time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC)
@@ -1452,51 +1451,6 @@ func TestDeregisterPostgresCluster(t *testing.T) {
 	}
 }
 
-func TestGetCellUtilization(t *testing.T) {
-	t.Parallel()
-
-	tests := map[string]struct {
-		setupMock func(m *openebsmocks.Connector)
-		wantBytes uint64
-		wantErr   string
-	}{
-		"success": {
-			setupMock: func(m *openebsmocks.Connector) {
-				bytes := uint64(1024 * 1024 * 1024 * 100)
-				m.EXPECT().AvailableSpaceBytes(mock.Anything).
-					Return(&bytes, nil)
-			},
-			wantBytes: 1024 * 1024 * 1024 * 100,
-		},
-		"error": {
-			setupMock: func(m *openebsmocks.Connector) {
-				m.EXPECT().AvailableSpaceBytes(mock.Anything).
-					Return(nil, fmt.Errorf("lvm not available"))
-			},
-			wantErr: "get cell utilization",
-		},
-	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			openebsMock := openebsmocks.NewConnector(t)
-			tt.setupMock(openebsMock)
-
-			svc, _ := setupTestClustersService(t, withOpenEBSConnector(openebsMock))
-
-			resp, err := svc.GetCellUtilization(context.Background(),
-				&clustersv1.GetCellUtilizationRequest{})
-
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, &tt.wantBytes, resp.AvailableBytes)
-		})
-	}
-}
-
 func TestGetObjectStore(t *testing.T) {
 	t.Parallel()
 
@@ -1799,7 +1753,6 @@ type testServiceConfig struct {
 	existingObjects  []client.Object
 	nodeSelector     map[string]string
 	cnpgConnector    *cnpgmocks.Connector
-	openebsConnector *openebsmocks.Connector
 	xatastorEnabled  bool
 	pgBackRestBucket string
 	interceptorFuncs interceptor.Funcs
@@ -1822,12 +1775,6 @@ func withNodeSelector(nodeSelector map[string]string) testServiceOption {
 func withCNPGConnector(m *cnpgmocks.Connector) testServiceOption {
 	return func(c *testServiceConfig) {
 		c.cnpgConnector = m
-	}
-}
-
-func withOpenEBSConnector(m *openebsmocks.Connector) testServiceOption {
-	return func(c *testServiceConfig) {
-		c.openebsConnector = m
 	}
 }
 
@@ -1895,11 +1842,10 @@ func setupTestClustersService(t *testing.T, opts ...testServiceOption) (*Cluster
 			PgBackRestBucket:            cfg.pgBackRestBucket,
 			PgBackRestRegion:            "us-east-1",
 		},
-		kubeClient:       fakeClient,
-		clusterReader:    fakeClient,
-		clusterCacheOk:   cacheReady,
-		cnpgConnector:    cfg.cnpgConnector,
-		openebsConnector: cfg.openebsConnector,
+		kubeClient:     fakeClient,
+		clusterReader:  fakeClient,
+		clusterCacheOk: cacheReady,
+		cnpgConnector:  cfg.cnpgConnector,
 	}
 
 	return svc, fakeClient

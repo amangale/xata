@@ -36,12 +36,6 @@ func TestToStrategy(t *testing.T) {
 			expectedError:    nil,
 		},
 		{
-			name:             "valid strategy - MaxCapacity",
-			strategyName:     strategy.MaxCapacityStrategyName,
-			expectedStrategy: &strategy.MaxCapacity{},
-			expectedError:    nil,
-		},
-		{
 			name:             "invalid strategy",
 			strategyName:     "InvalidStrategy",
 			expectedStrategy: nil,

@@ -30,9 +30,6 @@ service ClustersService {
   // Deregister a postgres cluster by deleting the global services
   rpc DeregisterPostgresCluster(DeregisterPostgresClusterRequest) returns (DeregisterPostgresClusterResponse) {}
 
-  // Get utilizatation information for the cell
-  rpc GetCellUtilization(GetCellUtilizationRequest) returns (GetCellUtilizationResponse) {}
-
   // Get object store for a postgres cluster
   rpc GetObjectStore(GetObjectStoreRequest) returns (GetObjectStoreResponse) {}
 
@@ -158,12 +155,6 @@ message DeregisterPostgresClusterRequest {
 }
 
 message DeregisterPostgresClusterResponse {}
-
-message GetCellUtilizationRequest {}
-
-message GetCellUtilizationResponse {
-  optional uint64 available_bytes = 1;
-}
 
 message ClusterConfiguration {
   int32 num_instances = 1;

@@ -27,7 +27,6 @@ const (
 	ClustersService_DeletePostgresCluster_FullMethodName            = "/clusters.v1.ClustersService/DeletePostgresCluster"
 	ClustersService_RegisterPostgresCluster_FullMethodName          = "/clusters.v1.ClustersService/RegisterPostgresCluster"
 	ClustersService_DeregisterPostgresCluster_FullMethodName        = "/clusters.v1.ClustersService/DeregisterPostgresCluster"
-	ClustersService_GetCellUtilization_FullMethodName               = "/clusters.v1.ClustersService/GetCellUtilization"
 	ClustersService_GetObjectStore_FullMethodName                   = "/clusters.v1.ClustersService/GetObjectStore"
 	ClustersService_SetBranchIPFiltering_FullMethodName             = "/clusters.v1.ClustersService/SetBranchIPFiltering"
 	ClustersService_SetBranchesIPFiltering_FullMethodName           = "/clusters.v1.ClustersService/SetBranchesIPFiltering"
@@ -59,8 +58,6 @@ type ClustersServiceClient interface {
 	RegisterPostgresCluster(ctx context.Context, in *RegisterPostgresClusterRequest, opts ...grpc.CallOption) (*RegisterPostgresClusterResponse, error)
 	// Deregister a postgres cluster by deleting the global services
 	DeregisterPostgresCluster(ctx context.Context, in *DeregisterPostgresClusterRequest, opts ...grpc.CallOption) (*DeregisterPostgresClusterResponse, error)
-	// Get utilizatation information for the cell
-	GetCellUtilization(ctx context.Context, in *GetCellUtilizationRequest, opts ...grpc.CallOption) (*GetCellUtilizationResponse, error)
 	// Get object store for a postgres cluster
 	GetObjectStore(ctx context.Context, in *GetObjectStoreRequest, opts ...grpc.CallOption) (*GetObjectStoreResponse, error)
 	// Set IP filtering configuration for a branch
@@ -165,16 +162,6 @@ func (c *clustersServiceClient) DeregisterPostgresCluster(ctx context.Context, i
 	return out, nil
 }
 
-func (c *clustersServiceClient) GetCellUtilization(ctx context.Context, in *GetCellUtilizationRequest, opts ...grpc.CallOption) (*GetCellUtilizationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetCellUtilizationResponse)
-	err := c.cc.Invoke(ctx, ClustersService_GetCellUtilization_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *clustersServiceClient) GetObjectStore(ctx context.Context, in *GetObjectStoreRequest, opts ...grpc.CallOption) (*GetObjectStoreResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetObjectStoreResponse)
@@ -267,8 +254,6 @@ type ClustersServiceServer interface {
 	RegisterPostgresCluster(context.Context, *RegisterPostgresClusterRequest) (*RegisterPostgresClusterResponse, error)
 	// Deregister a postgres cluster by deleting the global services
 	DeregisterPostgresCluster(context.Context, *DeregisterPostgresClusterRequest) (*DeregisterPostgresClusterResponse, error)
-	// Get utilizatation information for the cell
-	GetCellUtilization(context.Context, *GetCellUtilizationRequest) (*GetCellUtilizationResponse, error)
 	// Get object store for a postgres cluster
 	GetObjectStore(context.Context, *GetObjectStoreRequest) (*GetObjectStoreResponse, error)
 	// Set IP filtering configuration for a branch
@@ -316,9 +301,6 @@ func (UnimplementedClustersServiceServer) RegisterPostgresCluster(context.Contex
 }
 func (UnimplementedClustersServiceServer) DeregisterPostgresCluster(context.Context, *DeregisterPostgresClusterRequest) (*DeregisterPostgresClusterResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeregisterPostgresCluster not implemented")
-}
-func (UnimplementedClustersServiceServer) GetCellUtilization(context.Context, *GetCellUtilizationRequest) (*GetCellUtilizationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetCellUtilization not implemented")
 }
 func (UnimplementedClustersServiceServer) GetObjectStore(context.Context, *GetObjectStoreRequest) (*GetObjectStoreResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetObjectStore not implemented")
@@ -506,24 +488,6 @@ func _ClustersService_DeregisterPostgresCluster_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ClustersService_GetCellUtilization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetCellUtilizationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ClustersServiceServer).GetCellUtilization(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ClustersService_GetCellUtilization_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ClustersServiceServer).GetCellUtilization(ctx, req.(*GetCellUtilizationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ClustersService_GetObjectStore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetObjectStoreRequest)
 	if err := dec(in); err != nil {
@@ -688,10 +652,6 @@ var ClustersService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeregisterPostgresCluster",
 			Handler:    _ClustersService_DeregisterPostgresCluster_Handler,
-		},
-		{
-			MethodName: "GetCellUtilization",
-			Handler:    _ClustersService_GetCellUtilization_Handler,
 		},
 		{
 			MethodName: "GetObjectStore",

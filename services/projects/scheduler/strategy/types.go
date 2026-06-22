@@ -14,7 +14,6 @@ const (
 	AlwaysPrimaryStrategyName   Name = "AlwaysPrimary"
 	AlwaysSecondaryStrategyName Name = "AlwaysSecondary"
 	RandomStrategyName          Name = "Random"
-	MaxCapacityStrategyName     Name = "MaxCapacity"
 )
 
 var ErrInvalidStrategy = errors.New("invalid strategy")
@@ -34,8 +33,6 @@ func (s Name) ToStrategy() (Interface, error) {
 		return &AlwaysSecondary{}, nil
 	case RandomStrategyName:
 		return &Random{}, nil
-	case MaxCapacityStrategyName:
-		return &MaxCapacity{CellClientForCell: cellClientForCell}, nil
 	default:
 		return nil, fmt.Errorf("%w - %q", ErrInvalidStrategy, s)
 	}
