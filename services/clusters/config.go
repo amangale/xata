@@ -12,7 +12,6 @@ type Config struct {
 	ClustersStorageRequest      int32             `env:"XATA_CLUSTERS_STORAGE_REQUEST_GB" env-default:"250" env-description:"default storage size of the cluster in Gb"`
 	ClustersStorageClass        string            `env:"XATA_CLUSTERS_STORAGE_CLASS" env-description:"storageclass to use for clusters"`
 	ClustersVolumeSnapshotClass string            `env:"XATA_CLUSTERS_VOLUME_SNAPSHOT_CLASS" env-description:"volumesnapshotclass to use for clusters"`
-	DiskPoolNamespace           string            `env:"XATA_DISKPOOL_NAMESPACE" env-default:"openebs" env-description:"namespace where DiskPool resources are created"`
 	EnablePooler                bool              `env:"XATA_ENABLE_POOLER" env-default:"true" env-description:"enable PgBouncer connection pooler for new branches"`
 	XatastorEnabled             bool              `env:"XATA_XATASTOR_ENABLED" env-default:"false" env-description:"whether the xatastor StorageClass is deployed in this cell"`
 	PgBackRestBucket            string            `env:"XATA_PGBACKREST_BUCKET" env-default:"" env-description:"S3 bucket for pgbackrest backups"`
