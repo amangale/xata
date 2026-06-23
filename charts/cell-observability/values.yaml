@@ -26,6 +26,10 @@ victoria-metrics:
       - key: xata.io/workload
         value: dataplane
         effect: NoSchedule
+      - key: kubernetes.io/arch
+        operator: Equal
+        value: arm64
+        effect: NoSchedule
 
 victoria-logs:
   server:
@@ -45,6 +49,10 @@ victoria-logs:
       - key: xata.io/workload
         value: dataplane
         effect: NoSchedule
+      - key: kubernetes.io/arch
+        operator: Equal
+        value: arm64
+        effect: NoSchedule
 
 # The metric_relabel keep-lists below are pinned to the entries in
 # services/clusters/observability/metrics.go (`metricCatalog`). Update both
@@ -62,6 +70,10 @@ vmagent:
   tolerations:
     - key: xata.io/workload
       value: dataplane
+      effect: NoSchedule
+    - key: kubernetes.io/arch
+      operator: Equal
+      value: arm64
       effect: NoSchedule
 
   # Chart's default ClusterRole grants nodes + nodes/metrics; cAdvisor scraping
@@ -173,6 +185,10 @@ vector:
   tolerations:
     - key: xata.io/workload
       value: dataplane
+      effect: NoSchedule
+    - key: kubernetes.io/arch
+      operator: Equal
+      value: arm64
       effect: NoSchedule
 
   # Agent has no listening sources, so the chart's empty Service is just noise.

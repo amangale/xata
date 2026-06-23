@@ -53,3 +53,7 @@ tolerations:
   - effect: NoSchedule
     key: xata.io/workload
     value: dataplane
+  - effect: NoSchedule
+    key: kubernetes.io/arch
+    operator: Equal
+    value: arm64

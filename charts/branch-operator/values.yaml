@@ -8,7 +8,7 @@ imagePullSecrets: []
 config:
   branchOperator:
     imageSecrets: ghcr-secret
-    clustersTolerations: "xata.io/workload=dataplane:NoSchedule"
+    clustersTolerations: "xata.io/workload=dataplane:NoSchedule,kubernetes.io/arch=arm64:NoSchedule"
     cloudProvider: aws
     barmanRegionSecret:
       # Without this barman will create a role and bind it to our CNPG pods with
@@ -47,4 +47,8 @@ affinity:
 tolerations:
   - key: "xata.io/workload"
     value: "dataplane"
+    effect: "NoSchedule"
+  - key: "kubernetes.io/arch"
+    operator: "Equal"
+    value: "arm64"
     effect: "NoSchedule"
