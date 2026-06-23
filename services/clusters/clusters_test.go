@@ -1287,6 +1287,147 @@ func TestGetPostgresClusterCredentials(t *testing.T) {
 	}
 }
 
+func TestGetBranchPasswordSyncStatus(t *testing.T) {
+	t.Parallel()
+
+	const (
+		branchID    = "branch-1"
+		clusterName = "cluster-1"
+		username    = "xata"
+	)
+
+	// branchFixture builds a Branch pointing at clusterName, optionally
+	// carrying the awaiting-wakeup annotation.
+	branchFixture := func(awaitingWakeup bool) *v1alpha1.Branch {
+		b := &v1alpha1.Branch{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: branchID,
+			},
+			Spec: v1alpha1.BranchSpec{
+				ClusterSpec: v1alpha1.ClusterSpec{
+					Name: new(clusterName),
+				},
+			},
+		}
+		if awaitingWakeup {
+			b.Annotations = map[string]string{v1alpha1.AwaitingWakeupAnnotation: "true"}
+		}
+		return b
+	}
+
+	// branchWithoutClusterFixture builds a Branch with no associated cluster.
+	branchWithoutClusterFixture := func() *v1alpha1.Branch {
+		return &v1alpha1.Branch{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: branchID,
+			},
+		}
+	}
+
+	// clusterFixture builds a Cluster with username as a managed role and the
+	// given secret resource version recorded in its password status.
+	clusterFixture := func(secretVersion string) *apiv1.Cluster {
+		return &apiv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: "xata-clusters"},
+			Spec: apiv1.ClusterSpec{
+				Managed: &apiv1.ManagedConfiguration{
+					Roles: []apiv1.RoleConfiguration{{
+						Name: username,
+					}},
+				},
+			},
+			Status: apiv1.ClusterStatus{
+				ManagedRolesStatus: apiv1.ManagedRoles{
+					PasswordStatus: map[string]apiv1.PasswordState{
+						username: {
+							SecretResourceVersion: secretVersion,
+						},
+					},
+				},
+			},
+		}
+	}
+
+	tests := map[string]struct {
+		username   string
+		objects    []client.Object
+		setupMock  func(m *cnpgmocks.Connector)
+		wantSynced bool
+		wantCode   codes.Code
+	}{
+		"branch password synced": {
+			username: username,
+			objects:  []client.Object{branchFixture(false), clusterFixture("5")},
+			setupMock: func(m *cnpgmocks.Connector) {
+				m.EXPECT().GetClusterCredentials(mock.Anything, branchID, "xata-clusters", "app").
+					Return(&cnpg.Credentials{SecretVersion: "5"}, nil)
+			},
+			wantSynced: true,
+		},
+		"branch password not synced - version mismatch": {
+			username: username,
+			objects:  []client.Object{branchFixture(false), clusterFixture("5")},
+			setupMock: func(m *cnpgmocks.Connector) {
+				m.EXPECT().GetClusterCredentials(mock.Anything, branchID, "xata-clusters", "app").
+					Return(&cnpg.Credentials{SecretVersion: "6"}, nil)
+			},
+			wantSynced: false,
+		},
+		"branch password not synced - branch is awaiting wakeup": {
+			username:   username,
+			objects:    []client.Object{branchFixture(true), clusterFixture("5")},
+			wantSynced: false,
+		},
+		"branch has no associated cluster - trivially synced": {
+			username:   username,
+			objects:    []client.Object{branchWithoutClusterFixture()},
+			wantSynced: true,
+		},
+		"postgres user is always reported as synced": {
+			username:   "postgres",
+			objects:    []client.Object{branchFixture(false), clusterFixture("6")},
+			wantSynced: true,
+		},
+		"unknown username": {
+			username: "unknown",
+			wantCode: codes.InvalidArgument,
+		},
+		"branch not found": {
+			username: username,
+			wantCode: codes.NotFound,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			cnpgMock := cnpgmocks.NewConnector(t)
+			if tt.setupMock != nil {
+				tt.setupMock(cnpgMock)
+			}
+
+			svc, _ := setupTestClustersService(t,
+				withCNPGConnector(cnpgMock),
+				withExistingObjects(tt.objects...),
+			)
+
+			resp, err := svc.GetBranchPasswordSyncStatus(context.Background(),
+				&clustersv1.GetBranchPasswordSyncStatusRequest{
+					BranchId: branchID,
+					Username: tt.username,
+				})
+
+			if tt.wantCode != codes.OK {
+				st, _ := status.FromError(err)
+				require.Equal(t, tt.wantCode, st.Code())
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.wantSynced, resp.GetSynced())
+		})
+	}
+}
+
 func TestRotatePostgresClusterCredentials(t *testing.T) {
 	t.Parallel()
 

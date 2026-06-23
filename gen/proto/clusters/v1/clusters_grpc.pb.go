@@ -34,6 +34,7 @@ const (
 	ClustersService_DeleteBranchIPFiltering_FullMethodName          = "/clusters.v1.ClustersService/DeleteBranchIPFiltering"
 	ClustersService_GetBranchMetrics_FullMethodName                 = "/clusters.v1.ClustersService/GetBranchMetrics"
 	ClustersService_GetBranchLogs_FullMethodName                    = "/clusters.v1.ClustersService/GetBranchLogs"
+	ClustersService_GetBranchPasswordSyncStatus_FullMethodName      = "/clusters.v1.ClustersService/GetBranchPasswordSyncStatus"
 )
 
 // ClustersServiceClient is the client API for ClustersService service.
@@ -72,6 +73,8 @@ type ClustersServiceClient interface {
 	GetBranchMetrics(ctx context.Context, in *GetBranchMetricsRequest, opts ...grpc.CallOption) (*GetBranchMetricsResponse, error)
 	// Get log entries for a branch (per-cell observability backend)
 	GetBranchLogs(ctx context.Context, in *GetBranchLogsRequest, opts ...grpc.CallOption) (*GetBranchLogsResponse, error)
+	// Get the password sync status for a branch
+	GetBranchPasswordSyncStatus(ctx context.Context, in *GetBranchPasswordSyncStatusRequest, opts ...grpc.CallOption) (*GetBranchPasswordSyncStatusResponse, error)
 }
 
 type clustersServiceClient struct {
@@ -232,6 +235,16 @@ func (c *clustersServiceClient) GetBranchLogs(ctx context.Context, in *GetBranch
 	return out, nil
 }
 
+func (c *clustersServiceClient) GetBranchPasswordSyncStatus(ctx context.Context, in *GetBranchPasswordSyncStatusRequest, opts ...grpc.CallOption) (*GetBranchPasswordSyncStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBranchPasswordSyncStatusResponse)
+	err := c.cc.Invoke(ctx, ClustersService_GetBranchPasswordSyncStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClustersServiceServer is the server API for ClustersService service.
 // All implementations must embed UnimplementedClustersServiceServer
 // for forward compatibility.
@@ -268,6 +281,8 @@ type ClustersServiceServer interface {
 	GetBranchMetrics(context.Context, *GetBranchMetricsRequest) (*GetBranchMetricsResponse, error)
 	// Get log entries for a branch (per-cell observability backend)
 	GetBranchLogs(context.Context, *GetBranchLogsRequest) (*GetBranchLogsResponse, error)
+	// Get the password sync status for a branch
+	GetBranchPasswordSyncStatus(context.Context, *GetBranchPasswordSyncStatusRequest) (*GetBranchPasswordSyncStatusResponse, error)
 	mustEmbedUnimplementedClustersServiceServer()
 }
 
@@ -322,6 +337,9 @@ func (UnimplementedClustersServiceServer) GetBranchMetrics(context.Context, *Get
 }
 func (UnimplementedClustersServiceServer) GetBranchLogs(context.Context, *GetBranchLogsRequest) (*GetBranchLogsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBranchLogs not implemented")
+}
+func (UnimplementedClustersServiceServer) GetBranchPasswordSyncStatus(context.Context, *GetBranchPasswordSyncStatusRequest) (*GetBranchPasswordSyncStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBranchPasswordSyncStatus not implemented")
 }
 func (UnimplementedClustersServiceServer) mustEmbedUnimplementedClustersServiceServer() {}
 func (UnimplementedClustersServiceServer) testEmbeddedByValue()                         {}
@@ -614,6 +632,24 @@ func _ClustersService_GetBranchLogs_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClustersService_GetBranchPasswordSyncStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBranchPasswordSyncStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClustersServiceServer).GetBranchPasswordSyncStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClustersService_GetBranchPasswordSyncStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClustersServiceServer).GetBranchPasswordSyncStatus(ctx, req.(*GetBranchPasswordSyncStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClustersService_ServiceDesc is the grpc.ServiceDesc for ClustersService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -680,6 +716,10 @@ var ClustersService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBranchLogs",
 			Handler:    _ClustersService_GetBranchLogs_Handler,
+		},
+		{
+			MethodName: "GetBranchPasswordSyncStatus",
+			Handler:    _ClustersService_GetBranchPasswordSyncStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

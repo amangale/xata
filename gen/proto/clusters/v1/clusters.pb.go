@@ -2972,6 +2972,104 @@ func (x *LogEntry) GetProcess() string {
 	return ""
 }
 
+// GetBranchPasswordSyncStatusRequest is the request object for GetBranchPasswordStatus
+type GetBranchPasswordSyncStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BranchId      string                 `protobuf:"bytes,1,opt,name=branch_id,json=branchId,proto3" json:"branch_id,omitempty"`
+	Username      string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBranchPasswordSyncStatusRequest) Reset() {
+	*x = GetBranchPasswordSyncStatusRequest{}
+	mi := &file_clusters_v1_clusters_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBranchPasswordSyncStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBranchPasswordSyncStatusRequest) ProtoMessage() {}
+
+func (x *GetBranchPasswordSyncStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_clusters_v1_clusters_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBranchPasswordSyncStatusRequest.ProtoReflect.Descriptor instead.
+func (*GetBranchPasswordSyncStatusRequest) Descriptor() ([]byte, []int) {
+	return file_clusters_v1_clusters_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *GetBranchPasswordSyncStatusRequest) GetBranchId() string {
+	if x != nil {
+		return x.BranchId
+	}
+	return ""
+}
+
+func (x *GetBranchPasswordSyncStatusRequest) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+// GetBranchPasswordSyncStatusResponse is the response object for GetBranchPasswordStatus
+type GetBranchPasswordSyncStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Synced        bool                   `protobuf:"varint,1,opt,name=synced,proto3" json:"synced,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBranchPasswordSyncStatusResponse) Reset() {
+	*x = GetBranchPasswordSyncStatusResponse{}
+	mi := &file_clusters_v1_clusters_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBranchPasswordSyncStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBranchPasswordSyncStatusResponse) ProtoMessage() {}
+
+func (x *GetBranchPasswordSyncStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_clusters_v1_clusters_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBranchPasswordSyncStatusResponse.ProtoReflect.Descriptor instead.
+func (*GetBranchPasswordSyncStatusResponse) Descriptor() ([]byte, []int) {
+	return file_clusters_v1_clusters_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *GetBranchPasswordSyncStatusResponse) GetSynced() bool {
+	if x != nil {
+		return x.Synced
+	}
+	return false
+}
+
 var File_clusters_v1_clusters_proto protoreflect.FileDescriptor
 
 const file_clusters_v1_clusters_proto_rawDesc = "" +
@@ -3209,7 +3307,12 @@ const file_clusters_v1_clusters_proto_rawDesc = "" +
 	"\aprocess\x18\x05 \x01(\tH\x01R\aprocess\x88\x01\x01B\b\n" +
 	"\x06_levelB\n" +
 	"\n" +
-	"\b_process2\xd9\r\n" +
+	"\b_process\"]\n" +
+	"\"GetBranchPasswordSyncStatusRequest\x12\x1b\n" +
+	"\tbranch_id\x18\x01 \x01(\tR\bbranchId\x12\x1a\n" +
+	"\busername\x18\x02 \x01(\tR\busername\"=\n" +
+	"#GetBranchPasswordSyncStatusResponse\x12\x16\n" +
+	"\x06synced\x18\x01 \x01(\bR\x06synced2\xde\x0e\n" +
 	"\x0fClustersService\x12p\n" +
 	"\x15CreatePostgresCluster\x12).clusters.v1.CreatePostgresClusterRequest\x1a*.clusters.v1.CreatePostgresClusterResponse\"\x00\x12v\n" +
 	"\x17DescribePostgresCluster\x12+.clusters.v1.DescribePostgresClusterRequest\x1a,.clusters.v1.DescribePostgresClusterResponse\"\x00\x12\x88\x01\n" +
@@ -3225,7 +3328,8 @@ const file_clusters_v1_clusters_proto_rawDesc = "" +
 	"\x14GetBranchIPFiltering\x12(.clusters.v1.GetBranchIPFilteringRequest\x1a).clusters.v1.GetBranchIPFilteringResponse\"\x00\x12v\n" +
 	"\x17DeleteBranchIPFiltering\x12+.clusters.v1.DeleteBranchIPFilteringRequest\x1a,.clusters.v1.DeleteBranchIPFilteringResponse\"\x00\x12a\n" +
 	"\x10GetBranchMetrics\x12$.clusters.v1.GetBranchMetricsRequest\x1a%.clusters.v1.GetBranchMetricsResponse\"\x00\x12X\n" +
-	"\rGetBranchLogs\x12!.clusters.v1.GetBranchLogsRequest\x1a\".clusters.v1.GetBranchLogsResponse\"\x00B\x9c\x01\n" +
+	"\rGetBranchLogs\x12!.clusters.v1.GetBranchLogsRequest\x1a\".clusters.v1.GetBranchLogsResponse\"\x00\x12\x82\x01\n" +
+	"\x1bGetBranchPasswordSyncStatus\x12/.clusters.v1.GetBranchPasswordSyncStatusRequest\x1a0.clusters.v1.GetBranchPasswordSyncStatusResponse\"\x00B\x9c\x01\n" +
 	"\x0fcom.clusters.v1B\rClustersProtoP\x01Z-github.com/xataio/maki/clusters/v1;clustersv1\xa2\x02\x03CXX\xaa\x02\vClusters.V1\xca\x02\vClusters\\V1\xe2\x02\x17Clusters\\V1\\GPBMetadata\xea\x02\fClusters::V1b\x06proto3"
 
 var (
@@ -3241,7 +3345,7 @@ func file_clusters_v1_clusters_proto_rawDescGZIP() []byte {
 }
 
 var file_clusters_v1_clusters_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_clusters_v1_clusters_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
+var file_clusters_v1_clusters_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
 var file_clusters_v1_clusters_proto_goTypes = []any{
 	(ClusterStatus_StatusType)(0),                    // 0: clusters.v1.ClusterStatus.StatusType
 	(*CreatePostgresClusterRequest)(nil),             // 1: clusters.v1.CreatePostgresClusterRequest
@@ -3292,11 +3396,13 @@ var file_clusters_v1_clusters_proto_goTypes = []any{
 	(*LogFilter)(nil),                                // 46: clusters.v1.LogFilter
 	(*GetBranchLogsResponse)(nil),                    // 47: clusters.v1.GetBranchLogsResponse
 	(*LogEntry)(nil),                                 // 48: clusters.v1.LogEntry
-	nil,                                              // 49: clusters.v1.ClusterConfiguration.PostgresConfigurationParametersEntry
-	nil,                                              // 50: clusters.v1.UpdateClusterConfiguration.PostgresConfigurationParametersEntry
-	nil,                                              // 51: clusters.v1.ClusterStatus.InstancesEntry
-	nil,                                              // 52: clusters.v1.ObjectStoreStatus.ServerRecoveryWindowEntry
-	(*timestamppb.Timestamp)(nil),                    // 53: google.protobuf.Timestamp
+	(*GetBranchPasswordSyncStatusRequest)(nil),       // 49: clusters.v1.GetBranchPasswordSyncStatusRequest
+	(*GetBranchPasswordSyncStatusResponse)(nil),      // 50: clusters.v1.GetBranchPasswordSyncStatusResponse
+	nil,                           // 51: clusters.v1.ClusterConfiguration.PostgresConfigurationParametersEntry
+	nil,                           // 52: clusters.v1.UpdateClusterConfiguration.PostgresConfigurationParametersEntry
+	nil,                           // 53: clusters.v1.ClusterStatus.InstancesEntry
+	nil,                           // 54: clusters.v1.ObjectStoreStatus.ServerRecoveryWindowEntry
+	(*timestamppb.Timestamp)(nil), // 55: google.protobuf.Timestamp
 }
 var file_clusters_v1_clusters_proto_depIdxs = []int32{
 	17, // 0: clusters.v1.CreatePostgresClusterRequest.configuration:type_name -> clusters.v1.ClusterConfiguration
@@ -3309,34 +3415,34 @@ var file_clusters_v1_clusters_proto_depIdxs = []int32{
 	23, // 7: clusters.v1.DescribePostgresClusterResponse.backup_configuration:type_name -> clusters.v1.BackupConfiguration
 	18, // 8: clusters.v1.UpdatePostgresClusterRequest.update_configuration:type_name -> clusters.v1.UpdateClusterConfiguration
 	19, // 9: clusters.v1.ClusterConfiguration.scale_to_zero:type_name -> clusters.v1.ScaleToZero
-	49, // 10: clusters.v1.ClusterConfiguration.postgres_configuration_parameters:type_name -> clusters.v1.ClusterConfiguration.PostgresConfigurationParametersEntry
+	51, // 10: clusters.v1.ClusterConfiguration.postgres_configuration_parameters:type_name -> clusters.v1.ClusterConfiguration.PostgresConfigurationParametersEntry
 	19, // 11: clusters.v1.UpdateClusterConfiguration.scale_to_zero:type_name -> clusters.v1.ScaleToZero
-	50, // 12: clusters.v1.UpdateClusterConfiguration.postgres_configuration_parameters:type_name -> clusters.v1.UpdateClusterConfiguration.PostgresConfigurationParametersEntry
+	52, // 12: clusters.v1.UpdateClusterConfiguration.postgres_configuration_parameters:type_name -> clusters.v1.UpdateClusterConfiguration.PostgresConfigurationParametersEntry
 	23, // 13: clusters.v1.UpdateClusterConfiguration.backup_configuration:type_name -> clusters.v1.BackupConfiguration
 	20, // 14: clusters.v1.ClusterStatus.phase:type_name -> clusters.v1.LifeCycle
-	51, // 15: clusters.v1.ClusterStatus.instances:type_name -> clusters.v1.ClusterStatus.InstancesEntry
+	53, // 15: clusters.v1.ClusterStatus.instances:type_name -> clusters.v1.ClusterStatus.InstancesEntry
 	0,  // 16: clusters.v1.ClusterStatus.status_type:type_name -> clusters.v1.ClusterStatus.StatusType
 	26, // 17: clusters.v1.GetObjectStoreResponse.status:type_name -> clusters.v1.ObjectStoreStatus
-	52, // 18: clusters.v1.ObjectStoreStatus.server_recovery_window:type_name -> clusters.v1.ObjectStoreStatus.ServerRecoveryWindowEntry
-	53, // 19: clusters.v1.ContinuousBackup.timestamp:type_name -> google.protobuf.Timestamp
+	54, // 18: clusters.v1.ObjectStoreStatus.server_recovery_window:type_name -> clusters.v1.ObjectStoreStatus.ServerRecoveryWindowEntry
+	55, // 19: clusters.v1.ContinuousBackup.timestamp:type_name -> google.protobuf.Timestamp
 	37, // 20: clusters.v1.SetBranchIPFilteringRequest.ip_filtering:type_name -> clusters.v1.IPFilteringConfig
 	37, // 21: clusters.v1.SetBranchesIPFilteringRequest.ip_filtering:type_name -> clusters.v1.IPFilteringConfig
 	37, // 22: clusters.v1.GetBranchIPFilteringResponse.ip_filtering:type_name -> clusters.v1.IPFilteringConfig
-	53, // 23: clusters.v1.GetBranchMetricsRequest.start:type_name -> google.protobuf.Timestamp
-	53, // 24: clusters.v1.GetBranchMetricsRequest.end:type_name -> google.protobuf.Timestamp
-	53, // 25: clusters.v1.GetBranchMetricsResponse.start:type_name -> google.protobuf.Timestamp
-	53, // 26: clusters.v1.GetBranchMetricsResponse.end:type_name -> google.protobuf.Timestamp
+	55, // 23: clusters.v1.GetBranchMetricsRequest.start:type_name -> google.protobuf.Timestamp
+	55, // 24: clusters.v1.GetBranchMetricsRequest.end:type_name -> google.protobuf.Timestamp
+	55, // 25: clusters.v1.GetBranchMetricsResponse.start:type_name -> google.protobuf.Timestamp
+	55, // 26: clusters.v1.GetBranchMetricsResponse.end:type_name -> google.protobuf.Timestamp
 	42, // 27: clusters.v1.GetBranchMetricsResponse.results:type_name -> clusters.v1.BranchMetricResult
 	43, // 28: clusters.v1.BranchMetricResult.series:type_name -> clusters.v1.MetricSeries
 	44, // 29: clusters.v1.MetricSeries.values:type_name -> clusters.v1.MetricValue
-	53, // 30: clusters.v1.MetricValue.timestamp:type_name -> google.protobuf.Timestamp
-	53, // 31: clusters.v1.GetBranchLogsRequest.start:type_name -> google.protobuf.Timestamp
-	53, // 32: clusters.v1.GetBranchLogsRequest.end:type_name -> google.protobuf.Timestamp
+	55, // 30: clusters.v1.MetricValue.timestamp:type_name -> google.protobuf.Timestamp
+	55, // 31: clusters.v1.GetBranchLogsRequest.start:type_name -> google.protobuf.Timestamp
+	55, // 32: clusters.v1.GetBranchLogsRequest.end:type_name -> google.protobuf.Timestamp
 	46, // 33: clusters.v1.GetBranchLogsRequest.filters:type_name -> clusters.v1.LogFilter
-	53, // 34: clusters.v1.GetBranchLogsResponse.start:type_name -> google.protobuf.Timestamp
-	53, // 35: clusters.v1.GetBranchLogsResponse.end:type_name -> google.protobuf.Timestamp
+	55, // 34: clusters.v1.GetBranchLogsResponse.start:type_name -> google.protobuf.Timestamp
+	55, // 35: clusters.v1.GetBranchLogsResponse.end:type_name -> google.protobuf.Timestamp
 	48, // 36: clusters.v1.GetBranchLogsResponse.logs:type_name -> clusters.v1.LogEntry
-	53, // 37: clusters.v1.LogEntry.timestamp:type_name -> google.protobuf.Timestamp
+	55, // 37: clusters.v1.LogEntry.timestamp:type_name -> google.protobuf.Timestamp
 	21, // 38: clusters.v1.ClusterStatus.InstancesEntry.value:type_name -> clusters.v1.InstanceStatus
 	27, // 39: clusters.v1.ObjectStoreStatus.ServerRecoveryWindowEntry.value:type_name -> clusters.v1.RecoveryWindow
 	1,  // 40: clusters.v1.ClustersService.CreatePostgresCluster:input_type -> clusters.v1.CreatePostgresClusterRequest
@@ -3354,23 +3460,25 @@ var file_clusters_v1_clusters_proto_depIdxs = []int32{
 	38, // 52: clusters.v1.ClustersService.DeleteBranchIPFiltering:input_type -> clusters.v1.DeleteBranchIPFilteringRequest
 	40, // 53: clusters.v1.ClustersService.GetBranchMetrics:input_type -> clusters.v1.GetBranchMetricsRequest
 	45, // 54: clusters.v1.ClustersService.GetBranchLogs:input_type -> clusters.v1.GetBranchLogsRequest
-	2,  // 55: clusters.v1.ClustersService.CreatePostgresCluster:output_type -> clusters.v1.CreatePostgresClusterResponse
-	6,  // 56: clusters.v1.ClustersService.DescribePostgresCluster:output_type -> clusters.v1.DescribePostgresClusterResponse
-	10, // 57: clusters.v1.ClustersService.GetPostgresClusterCredentials:output_type -> clusters.v1.GetPostgresClusterCredentialsResponse
-	12, // 58: clusters.v1.ClustersService.RotatePostgresClusterCredentials:output_type -> clusters.v1.RotatePostgresClusterCredentialsResponse
-	8,  // 59: clusters.v1.ClustersService.UpdatePostgresCluster:output_type -> clusters.v1.UpdatePostgresClusterResponse
-	4,  // 60: clusters.v1.ClustersService.DeletePostgresCluster:output_type -> clusters.v1.DeletePostgresClusterResponse
-	14, // 61: clusters.v1.ClustersService.RegisterPostgresCluster:output_type -> clusters.v1.RegisterPostgresClusterResponse
-	16, // 62: clusters.v1.ClustersService.DeregisterPostgresCluster:output_type -> clusters.v1.DeregisterPostgresClusterResponse
-	25, // 63: clusters.v1.ClustersService.GetObjectStore:output_type -> clusters.v1.GetObjectStoreResponse
-	32, // 64: clusters.v1.ClustersService.SetBranchIPFiltering:output_type -> clusters.v1.SetBranchIPFilteringResponse
-	34, // 65: clusters.v1.ClustersService.SetBranchesIPFiltering:output_type -> clusters.v1.SetBranchesIPFilteringResponse
-	36, // 66: clusters.v1.ClustersService.GetBranchIPFiltering:output_type -> clusters.v1.GetBranchIPFilteringResponse
-	39, // 67: clusters.v1.ClustersService.DeleteBranchIPFiltering:output_type -> clusters.v1.DeleteBranchIPFilteringResponse
-	41, // 68: clusters.v1.ClustersService.GetBranchMetrics:output_type -> clusters.v1.GetBranchMetricsResponse
-	47, // 69: clusters.v1.ClustersService.GetBranchLogs:output_type -> clusters.v1.GetBranchLogsResponse
-	55, // [55:70] is the sub-list for method output_type
-	40, // [40:55] is the sub-list for method input_type
+	49, // 55: clusters.v1.ClustersService.GetBranchPasswordSyncStatus:input_type -> clusters.v1.GetBranchPasswordSyncStatusRequest
+	2,  // 56: clusters.v1.ClustersService.CreatePostgresCluster:output_type -> clusters.v1.CreatePostgresClusterResponse
+	6,  // 57: clusters.v1.ClustersService.DescribePostgresCluster:output_type -> clusters.v1.DescribePostgresClusterResponse
+	10, // 58: clusters.v1.ClustersService.GetPostgresClusterCredentials:output_type -> clusters.v1.GetPostgresClusterCredentialsResponse
+	12, // 59: clusters.v1.ClustersService.RotatePostgresClusterCredentials:output_type -> clusters.v1.RotatePostgresClusterCredentialsResponse
+	8,  // 60: clusters.v1.ClustersService.UpdatePostgresCluster:output_type -> clusters.v1.UpdatePostgresClusterResponse
+	4,  // 61: clusters.v1.ClustersService.DeletePostgresCluster:output_type -> clusters.v1.DeletePostgresClusterResponse
+	14, // 62: clusters.v1.ClustersService.RegisterPostgresCluster:output_type -> clusters.v1.RegisterPostgresClusterResponse
+	16, // 63: clusters.v1.ClustersService.DeregisterPostgresCluster:output_type -> clusters.v1.DeregisterPostgresClusterResponse
+	25, // 64: clusters.v1.ClustersService.GetObjectStore:output_type -> clusters.v1.GetObjectStoreResponse
+	32, // 65: clusters.v1.ClustersService.SetBranchIPFiltering:output_type -> clusters.v1.SetBranchIPFilteringResponse
+	34, // 66: clusters.v1.ClustersService.SetBranchesIPFiltering:output_type -> clusters.v1.SetBranchesIPFilteringResponse
+	36, // 67: clusters.v1.ClustersService.GetBranchIPFiltering:output_type -> clusters.v1.GetBranchIPFilteringResponse
+	39, // 68: clusters.v1.ClustersService.DeleteBranchIPFiltering:output_type -> clusters.v1.DeleteBranchIPFilteringResponse
+	41, // 69: clusters.v1.ClustersService.GetBranchMetrics:output_type -> clusters.v1.GetBranchMetricsResponse
+	47, // 70: clusters.v1.ClustersService.GetBranchLogs:output_type -> clusters.v1.GetBranchLogsResponse
+	50, // 71: clusters.v1.ClustersService.GetBranchPasswordSyncStatus:output_type -> clusters.v1.GetBranchPasswordSyncStatusResponse
+	56, // [56:72] is the sub-list for method output_type
+	40, // [40:56] is the sub-list for method input_type
 	40, // [40:40] is the sub-list for extension type_name
 	40, // [40:40] is the sub-list for extension extendee
 	0,  // [0:40] is the sub-list for field type_name
@@ -3396,7 +3504,7 @@ func file_clusters_v1_clusters_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_clusters_v1_clusters_proto_rawDesc), len(file_clusters_v1_clusters_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   52,
+			NumMessages:   54,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

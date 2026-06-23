@@ -385,8 +385,9 @@ func Test_GetClusterCredentials(t *testing.T) {
 
 	secret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "xata-clusters",
-			Name:      "fakeID-superuser",
+			Namespace:       "xata-clusters",
+			Name:            "fakeID-superuser",
+			ResourceVersion: "1",
 		},
 		Data: map[string][]byte{
 			v1.BasicAuthUsernameKey: []byte("foo"),
@@ -410,8 +411,9 @@ func Test_GetClusterCredentials(t *testing.T) {
 			fakeClient: fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build(),
 			wantError:  false,
 			wantCreds: &Credentials{
-				Username: "foo",
-				Password: "bar",
+				SecretVersion: "1",
+				Username:      "foo",
+				Password:      "bar",
 			},
 		},
 		{
@@ -420,8 +422,9 @@ func Test_GetClusterCredentials(t *testing.T) {
 			username:  "anotheruser",
 			fakeClient: fake.NewClientBuilder().WithScheme(scheme).WithObjects(&v1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "xata-clusters",
-					Name:      "fakeID-anotheruser",
+					Namespace:       "xata-clusters",
+					Name:            "fakeID-anotheruser",
+					ResourceVersion: "1",
 				},
 				Data: map[string][]byte{
 					v1.BasicAuthUsernameKey: []byte("anotherusername"),
@@ -430,8 +433,9 @@ func Test_GetClusterCredentials(t *testing.T) {
 			}).Build(),
 			wantError: false,
 			wantCreds: &Credentials{
-				Username: "anotherusername",
-				Password: "anotheruserspassword",
+				SecretVersion: "1",
+				Username:      "anotherusername",
+				Password:      "anotheruserspassword",
 			},
 		},
 		{

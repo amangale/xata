@@ -779,6 +779,69 @@ func (c *ClustersService) GetBranchLogs(ctx context.Context, request *clustersv1
 	return resp, nil
 }
 
+// GetBranchPasswordSyncStatus retrieves the password status for a branch. This is
+// used to tell whether a credentials secret is in sync with the CNPG Cluster's
+// password for a given user.
+func (c *ClustersService) GetBranchPasswordSyncStatus(
+	ctx context.Context,
+	req *clustersv1.GetBranchPasswordSyncStatusRequest,
+) (*clustersv1.GetBranchPasswordSyncStatusResponse, error) {
+	// Convert the requested username to the corresponding secret suffix
+	secretSuffix, ok := userToSecretSuffix[req.GetUsername()]
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "unknown user %q", req.GetUsername())
+	}
+
+	// CNPG does not track password sync status for the "postgres" user, so
+	// return synced in that case
+	if req.GetUsername() == "postgres" {
+		return &clustersv1.GetBranchPasswordSyncStatusResponse{Synced: true}, nil
+	}
+
+	// Get the Branch corresponding to the requested branch ID
+	branch, err := c.getBranch(ctx, req.GetBranchId())
+	if err != nil {
+		return nil, k8sErrorToGRPCError(err)
+	}
+
+	// If the Branch is awaiting wakeup, the password is not synced
+	if branch.IsAwaitingWakeup() {
+		return &clustersv1.GetBranchPasswordSyncStatusResponse{Synced: false}, nil
+	}
+
+	// If the Branch has no associated Cluster the password is considered
+	// trivially synced, since there is no Cluster to sync with
+	if !branch.HasClusterName() {
+		return &clustersv1.GetBranchPasswordSyncStatusResponse{Synced: true}, nil
+	}
+
+	// Get the Cluster corresponding to the Branch
+	cluster, err := c.getCluster(ctx, branch.ClusterName())
+	if err != nil {
+		return nil, k8sErrorToGRPCError(err)
+	}
+
+	// Get the credentials for the requested user from the connector
+	creds, err := c.cnpgConnector.GetClusterCredentials(ctx, req.GetBranchId(), c.config.ClustersNamespace, secretSuffix)
+	if err != nil {
+		return nil, k8sErrorToGRPCError(err)
+	}
+
+	// Compare the password secret version in the Cluster status with the secret
+	// version from the connector to determine if they are in sync
+	return &clustersv1.GetBranchPasswordSyncStatusResponse{
+		Synced: clusterUsesCredsFromSecretVersion(cluster, req.GetUsername(), creds.SecretVersion),
+	}, nil
+}
+
+// clusterUsesCredsFromSecretVersion checks if the given cluster is using
+// credentials from the specified secret version for the given username.
+func clusterUsesCredsFromSecretVersion(cluster *apiv1.Cluster, username, secretVersion string) bool {
+	st, ok := cluster.Status.ManagedRolesStatus.PasswordStatus[username]
+
+	return ok && st.SecretResourceVersion == secretVersion
+}
+
 // getBranch retrieves the Branch CR for the given branch ID.
 func (c *ClustersService) getBranch(ctx context.Context, id string) (*branchv1alpha1.Branch, error) {
 	branch := &branchv1alpha1.Branch{}

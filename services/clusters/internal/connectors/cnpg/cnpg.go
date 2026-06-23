@@ -28,8 +28,9 @@ type Connector interface {
 }
 
 type Credentials struct {
-	Username string
-	Password string
+	SecretVersion string
+	Username      string
+	Password      string
 }
 
 type DefaultConnector struct {
@@ -155,7 +156,8 @@ func (c *DefaultConnector) GetClusterCredentials(ctx context.Context, id, namesp
 	}
 
 	return &Credentials{
-		Username: string(secret.Data[v1.BasicAuthUsernameKey]),
-		Password: string(secret.Data[v1.BasicAuthPasswordKey]),
+		SecretVersion: secret.ResourceVersion,
+		Username:      string(secret.Data[v1.BasicAuthUsernameKey]),
+		Password:      string(secret.Data[v1.BasicAuthPasswordKey]),
 	}, nil
 }

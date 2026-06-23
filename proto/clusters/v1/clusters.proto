@@ -50,6 +50,9 @@ service ClustersService {
 
   // Get log entries for a branch (per-cell observability backend)
   rpc GetBranchLogs(GetBranchLogsRequest) returns (GetBranchLogsResponse) {}
+
+  // Get the password sync status for a branch
+  rpc GetBranchPasswordSyncStatus(GetBranchPasswordSyncStatusRequest) returns (GetBranchPasswordSyncStatusResponse) {}
 }
 
 // CreatePostgresClusterRequest is the request object for CreatePostgresCluster
@@ -440,4 +443,15 @@ message LogEntry {
   string message = 4;
   // Originating PostgreSQL process (e.g. backend_type), when known
   optional string process = 5;
+}
+
+// GetBranchPasswordSyncStatusRequest is the request object for GetBranchPasswordStatus
+message GetBranchPasswordSyncStatusRequest {
+  string branch_id = 1;
+  string username = 2;
+}
+
+// GetBranchPasswordSyncStatusResponse is the response object for GetBranchPasswordStatus
+message GetBranchPasswordSyncStatusResponse {
+  bool synced = 1;
 }

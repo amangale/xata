@@ -556,6 +556,68 @@ func (_c *CellClient_GetBranchMetrics_Call) Return(_a0 *clustersv1.GetBranchMetr
 	return _c
 }
 
+// GetBranchPasswordSyncStatus provides a mock function with given fields: ctx, in, opts
+func (_m *CellClient) GetBranchPasswordSyncStatus(ctx context.Context, in *clustersv1.GetBranchPasswordSyncStatusRequest, opts ...grpc.CallOption) (*clustersv1.GetBranchPasswordSyncStatusResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *clustersv1.GetBranchPasswordSyncStatusResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *clustersv1.GetBranchPasswordSyncStatusRequest, ...grpc.CallOption) *clustersv1.GetBranchPasswordSyncStatusResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*clustersv1.GetBranchPasswordSyncStatusResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *clustersv1.GetBranchPasswordSyncStatusRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// CellClient_GetBranchPasswordSyncStatus_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBranchPasswordSyncStatus'
+type CellClient_GetBranchPasswordSyncStatus_Call struct {
+	*mock.Call
+}
+
+// GetBranchPasswordSyncStatus is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in *clustersv1.GetBranchPasswordSyncStatusRequest
+//   - opts ...grpc.CallOption
+func (_e *CellClient_Expecter) GetBranchPasswordSyncStatus(ctx interface{}, in interface{}, opts ...interface{}) *CellClient_GetBranchPasswordSyncStatus_Call {
+	return &CellClient_GetBranchPasswordSyncStatus_Call{Call: _e.mock.On("GetBranchPasswordSyncStatus",
+		append([]interface{}{ctx, in}, opts...)...)}
+}
+
+func (_c *CellClient_GetBranchPasswordSyncStatus_Call) Run(run func(ctx context.Context, in *clustersv1.GetBranchPasswordSyncStatusRequest, opts ...grpc.CallOption)) *CellClient_GetBranchPasswordSyncStatus_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]grpc.CallOption, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(grpc.CallOption)
+			}
+		}
+		run(args[0].(context.Context), args[1].(*clustersv1.GetBranchPasswordSyncStatusRequest), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *CellClient_GetBranchPasswordSyncStatus_Call) Return(_a0 *clustersv1.GetBranchPasswordSyncStatusResponse, _a1 error) *CellClient_GetBranchPasswordSyncStatus_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
 // GetObjectStore provides a mock function with given fields: ctx, in, opts
 func (_m *CellClient) GetObjectStore(ctx context.Context, in *clustersv1.GetObjectStoreRequest, opts ...grpc.CallOption) (*clustersv1.GetObjectStoreResponse, error) {
 	_va := make([]interface{}, len(opts))
