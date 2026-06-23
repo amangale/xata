@@ -1324,6 +1324,21 @@ func TestGetBranchPasswordSyncStatus(t *testing.T) {
 		}
 	}
 
+	// branchWithCNPGHibernation builds a Branch with CNPG hibernation enabled
+	branchWithCNPGHibernationFixture := func() *v1alpha1.Branch {
+		return &v1alpha1.Branch{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: branchID,
+			},
+			Spec: v1alpha1.BranchSpec{
+				ClusterSpec: v1alpha1.ClusterSpec{
+					Name:        new(clusterName),
+					Hibernation: ptr.To(v1alpha1.HibernationModeEnabled),
+				},
+			},
+		}
+	}
+
 	// clusterFixture builds a Cluster with username as a managed role and the
 	// given secret resource version recorded in its password status.
 	clusterFixture := func(secretVersion string) *apiv1.Cluster {
@@ -1381,6 +1396,11 @@ func TestGetBranchPasswordSyncStatus(t *testing.T) {
 		"branch has no associated cluster - trivially synced": {
 			username:   username,
 			objects:    []client.Object{branchWithoutClusterFixture()},
+			wantSynced: true,
+		},
+		"branch is CNPG hibernated - trivially synced": {
+			username:   username,
+			objects:    []client.Object{branchWithCNPGHibernationFixture(), clusterFixture("6")},
 			wantSynced: true,
 		},
 		"postgres user is always reported as synced": {

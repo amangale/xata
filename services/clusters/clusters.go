@@ -815,6 +815,12 @@ func (c *ClustersService) GetBranchPasswordSyncStatus(
 		return &clustersv1.GetBranchPasswordSyncStatusResponse{Synced: true}, nil
 	}
 
+	// If the Branch is CNPG hibernated the password is considered trivially
+	// synced since the Cluster is not running
+	if branch.Spec.ClusterSpec.Hibernation.IsEnabled() {
+		return &clustersv1.GetBranchPasswordSyncStatusResponse{Synced: true}, nil
+	}
+
 	// Get the Cluster corresponding to the Branch
 	cluster, err := c.getCluster(ctx, branch.ClusterName())
 	if err != nil {
