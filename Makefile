@@ -13,6 +13,22 @@ SOURCE_URL := $(or $(GITHUB_SERVER_URL),https://github.com)/$(or $(GITHUB_REPOSI
 help:  ## This help dialog.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m\033[0m\n"} /^[$$()% 0-9a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
+.PHONY: machine
+machine: ## Launch a personal EC2 machine
+	@pulumi env run -i xata/default/account-sandbox -- ./dev/scripts/machine.sh
+
+.PHONY: machine-start
+machine-start: ## Start your personal EC2 machine
+	@pulumi env run -i xata/default/account-sandbox -- ./dev/scripts/machine.sh start
+
+.PHONY: machine-stop
+machine-stop: ## Stop your personal EC2 machine
+	@pulumi env run -i xata/default/account-sandbox -- ./dev/scripts/machine.sh stop
+
+.PHONY: machine-destroy
+machine-destroy: ## Destroy your personal EC2 machine
+	@pulumi env run -i xata/default/account-sandbox -- ./dev/scripts/machine.sh destroy
+
 .PHONY: check
 check: lint  ## CI code checks
 
